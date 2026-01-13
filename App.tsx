@@ -16,7 +16,9 @@ import { Maintenance } from './components/Maintenance';
 import { Auth } from './components/Auth';
 import { ClientPortal } from './components/ClientPortal';
 import { PublicView } from './components/PublicView';
-import { getCurrentUser } from './services/authService';
+import { getCurrentUser, onAuthStateChange } from './services/authService';
+import { User } from './types';
+
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -66,9 +68,43 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getCurrentUser());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [portalMode, setPortalMode] = useState<{active: boolean, clientId: string | null}>({ active: false, clientId: null });
   const [publicMode, setPublicMode] = useState<{active: boolean, type: 'billboard' | 'map', id?: string}>({ active: false, type: 'map' });
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+        }
+      } catch (err) {
+        console.error('Error initializing auth:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth state changes
+    const unsubscribe = onAuthStateChange((user) => {
+      if (user) {
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
@@ -113,6 +149,20 @@ const App: React.FC = () => {
       default: return <Dashboard />;
     }
   };
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[#020617]">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-xl shadow-indigo-500/20 mb-4 animate-pulse">
+            <span className="text-white font-black text-2xl">D</span>
+          </div>
+          <p className="text-slate-400 mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Public View Routing (No Auth Required)
   if (publicMode.active) {

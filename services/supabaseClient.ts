@@ -1,24 +1,20 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Access LocalStorage directly since this runs in the browser
-const supabaseUrl = localStorage.getItem('sb_url');
-const supabaseKey = localStorage.getItem('sb_key');
+// Get Supabase credentials from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let client = null;
 
-try {
-    if (supabaseUrl && supabaseKey) {
-        // Basic validation to prevent synchronous crashes in createClient
-        if (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://')) {
-            client = createClient(supabaseUrl, supabaseKey);
-        } else {
-            console.warn("Supabase URL ignored: Must start with http:// or https://");
-        }
+if (!supabaseUrl || !supabaseKey) {
+    console.warn("Supabase credentials not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local");
+} else {
+    try {
+        client = createClient(supabaseUrl, supabaseKey);
+    } catch (e) {
+        console.error("Supabase initialization failed:", e);
     }
-} catch (e) {
-    console.error("Supabase initialization failed:", e);
-    // Keep client as null so the app continues to work in local-only mode
 }
 
 export const supabase = client;
@@ -29,16 +25,40 @@ export const isSupabaseConfigured = () => !!supabase;
 export const checkSupabaseConnection = async () => {
     if (!supabase) return false;
     try {
-        const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
-        // PGRST116 (JSON result) or success (null error) means we hit the API. 
-        // A connection error usually comes as a network error or 400/404/500 object.
-        if (error && error.code !== 'PGRST116') { 
-             console.error("Supabase Connection Check Error:", error);
-             return false;
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+            console.error("Supabase Connection Check Error:", error);
+            return false;
         }
         return true;
     } catch (e) {
         console.error("Supabase Connection Exception:", e);
         return false;
     }
+};
+
+// Get the current session
+export const getCurrentSession = async () => {
+    if (!supabase) return null;
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        return session;
+    } catch (e) {
+        console.error("Error getting session:", e);
+        return null;
+    }
+};
+
+// Listen to auth state changes
+export const onAuthStateChange = (callback: (session: any) => void) => {
+    if (!supabase) return () => {};
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        callback(session);
+    });
+
+    return () => {
+        subscription?.unsubscribe();
+    };
 };

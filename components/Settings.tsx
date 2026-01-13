@@ -5,6 +5,7 @@ import { Shield, Building, ScrollText, Download, Plus, X, Save, Phone, MapPin, E
 import { User as UserType, CompanyProfile } from '../types';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../services/supabaseClient';
 
+
 const MinimalInput = ({ label, value, onChange, type = "text", required = false, placeholder = "", disabled = false }: any) => (
   <div className="group relative">
     <input type={type} required={required} value={value || ''} onChange={onChange} disabled={disabled} placeholder=" " className="peer w-full px-0 py-2.5 border-b border-slate-200 bg-transparent text-slate-800 focus:border-slate-800 focus:ring-0 outline-none transition-all font-medium placeholder-transparent disabled:opacity-60 disabled:cursor-not-allowed" />

@@ -1,150 +1,391 @@
+import { supabase, isSupabaseConfigured as checkSupabaseConfigured } from './supabaseClient';
 import { User } from '../types';
+
+// Fallback mock data for local development without Supabase
 import { getUsers, addUser, findUser, fetchLatestUsers } from './mockData';
 
-// Simulated delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const login = async (identifier: string, password: string): Promise<User | null> => {
-    // Attempt to pull latest user data from cloud to ensure login works across devices
-    // This now returns the updated user list if successful, or null if offline/error
-    const remoteUsers = await fetchLatestUsers();
-    
-    await delay(800); 
+/**
+ * Re-export isSupabaseConfigured from supabaseClient
+ */
+export const isSupabaseConfigured = checkSupabaseConfigured;
 
-    // --- EMERGENCY DEVELOPER BACKDOOR ---
-    // Guarantees access for 'dev' user even if local storage is out of sync
-    if ((identifier.toLowerCase() === 'dev' || identifier.toLowerCase() === 'dev@dreambox.com') && password === 'dev123') {
-        const devUser: User = {
-            id: 'dev-admin-001',
-            firstName: 'System',
-            lastName: 'Developer',
-            email: 'dev@dreambox.com',
-            username: 'dev',
-            role: 'Admin',
-            status: 'Active',
-            password: 'dev123'
-        };
-        
-        // Ensure user is in the main list for consistency
-        const existing = findUser('dev');
-        if (!existing) {
-            addUser(devUser);
+/**
+ * Sign up a new user with Supabase
+ */
+export const register = async (firstName: string, lastName: string, email: string, password: string): Promise<any> => {
+    if (!isSupabaseConfigured()) {
+        // Fallback to mock implementation
+        const existing = findUser(email);
+        if (existing) {
+            throw new Error("Email/Username already registered");
         }
+        const newUser: User = {
+            id: Date.now().toString(),
+            firstName,
+            lastName,
+            email,
+            password,
+            role: 'Staff',
+            status: 'Pending'
+        };
+        addUser(newUser);
+        return newUser;
+    }
 
-        try {
-            localStorage.setItem('billboard_user', JSON.stringify(devUser));
-        } catch (e) {
-            console.warn("Storage Full during login - Attempting emergency cleanup for session...");
-            localStorage.removeItem('db_logs');
-            localStorage.removeItem('db_auto_backup_data');
+    try {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    firstName,
+                    lastName,
+                }
+            }
+        });
+
+        if (error) throw error;
+        return data;
+    } catch (err: any) {
+        throw new Error(err.message || 'Registration failed');
+    }
+};
+
+/**
+ * Sign in with email and password
+ */
+export const login = async (identifier: string, password: string): Promise<User | null> => {
+    if (!isSupabaseConfigured()) {
+        // Fallback to mock implementation
+        const remoteUsers = await fetchLatestUsers();
+        await delay(800);
+
+        // Developer backdoors (keep for development)
+        if ((identifier.toLowerCase() === 'dev' || identifier.toLowerCase() === 'dev@dreambox.com') && password === 'dev123') {
+            const devUser: User = {
+                id: 'dev-admin-001',
+                firstName: 'System',
+                lastName: 'Developer',
+                email: 'dev@dreambox.com',
+                username: 'dev',
+                role: 'Admin',
+                status: 'Active',
+                password: 'dev123'
+            };
+            
+            const existing = findUser('dev');
+            if (!existing) {
+                addUser(devUser);
+            }
+
             try {
                 localStorage.setItem('billboard_user', JSON.stringify(devUser));
-            } catch (finalError) {
-                console.error("Login failed: Cannot persist session.", finalError);
-                throw new Error("Storage Critical: Cannot save login session. Please clear browser data.");
+            } catch (e) {
+                console.warn("Storage Full during login");
+                localStorage.removeItem('db_logs');
+                localStorage.removeItem('db_auto_backup_data');
+                try {
+                    localStorage.setItem('billboard_user', JSON.stringify(devUser));
+                } catch (finalError) {
+                    throw new Error("Storage Critical: Cannot save login session.");
+                }
             }
+            return devUser;
         }
-        return devUser;
-    }
 
-    // --- SECONDARY DEVELOPER BACKDOOR (Nick) ---
-    if (identifier.toLowerCase() === 'nick@creamobmedia.co.zw' && password === 'Nh@modzepasi9') {
-        const nickUser: User = {
-            id: 'dev-admin-002',
-            firstName: 'Nick',
-            lastName: 'Developer',
-            email: 'nick@creamobmedia.co.zw',
-            username: 'nick',
-            role: 'Admin',
-            status: 'Active',
-            password: 'Nh@modzepasi9'
-        };
+        const userList = remoteUsers || getUsers();
+        const term = identifier.toLowerCase().trim();
+        const user = userList.find(u => u.email.toLowerCase() === term || (u.username && u.username.toLowerCase() === term));
         
-        const existing = findUser('nick@creamobmedia.co.zw');
-        if (!existing) {
-            addUser(nickUser);
-        }
-
-        try {
-            localStorage.setItem('billboard_user', JSON.stringify(nickUser));
-        } catch (e) {
-            localStorage.removeItem('db_logs');
-            localStorage.removeItem('db_auto_backup_data');
-            try {
-                localStorage.setItem('billboard_user', JSON.stringify(nickUser));
-            } catch (finalError) {
-                throw new Error("Storage Critical: Cannot save login session. Please clear browser data.");
+        if (user && user.password === password) {
+            if (user.status !== 'Active') {
+                throw new Error(user.status === 'Pending' ? "Account awaiting Admin approval." : "Account access restricted.");
             }
+            try {
+                localStorage.setItem('billboard_user', JSON.stringify(user));
+            } catch (e) {
+                console.warn("Storage Full during login");
+                localStorage.removeItem('db_logs');
+                localStorage.removeItem('db_auto_backup_data');
+                try {
+                    localStorage.setItem('billboard_user', JSON.stringify(user));
+                } catch (finalError) {
+                    throw new Error("Storage Critical: Cannot save login session.");
+                }
+            }
+            return user;
         }
-        return nickUser;
+        return null;
     }
-    // ------------------------------------
 
-    // Determine which user list to search.
-    // If we successfully fetched from cloud, use that specific array to be 100% sure we have fresh data.
-    // Otherwise fallback to local state via getUsers().
-    const userList = remoteUsers || getUsers();
-    
-    const term = identifier.toLowerCase().trim();
-    const user = userList.find(u => u.email.toLowerCase() === term || (u.username && u.username.toLowerCase() === term));
-    
-    if (user && user.password === password) {
-        if (user.status !== 'Active') {
-            throw new Error(user.status === 'Pending' ? "Account awaiting Admin approval." : "Account access restricted.");
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: identifier,
+            password
+        });
+
+        if (error) throw error;
+
+        // Return user data from session
+        if (data.user) {
+            return {
+                id: data.user.id,
+                email: data.user.email || '',
+                firstName: data.user.user_metadata?.firstName || '',
+                lastName: data.user.user_metadata?.lastName || '',
+                role: data.user.user_metadata?.role || 'Staff',
+                status: data.user.user_metadata?.status || 'Active',
+                username: data.user.email?.split('@')[0] || ''
+            };
         }
-        try {
-            localStorage.setItem('billboard_user', JSON.stringify(user));
-        } catch (e) {
-             console.warn("Storage Full during login - Attempting emergency cleanup for session...");
-             localStorage.removeItem('db_logs');
-             localStorage.removeItem('db_auto_backup_data');
-             try {
-                 localStorage.setItem('billboard_user', JSON.stringify(user));
-             } catch (finalError) {
-                 throw new Error("Storage Critical: Cannot save login session. Please clear browser data.");
-             }
-        }
-        return user;
+        return null;
+    } catch (err: any) {
+        throw new Error(err.message || 'Login failed');
     }
-    return null;
 };
 
-export const register = async (firstName: string, lastName: string, email: string, password: string): Promise<User> => {
-    await delay(1000);
-    const existing = findUser(email);
-    if (existing) {
-        throw new Error("Email/Username already registered");
-    }
-
-    const newUser: User = {
-        id: Date.now().toString(),
-        firstName,
-        lastName,
-        email,
-        password,
-        role: 'Staff', // Default role (overridden by approval)
-        status: 'Pending' // Default status
-    };
-
-    addUser(newUser);
-    // Note: We do NOT set localStorage here anymore. User must be approved first.
-    return newUser;
-};
-
-export const resetPassword = async (email: string): Promise<void> => {
-    await delay(1500);
-    const user = findUser(email);
-    if (!user) {
-        throw new Error("No account found with this email address");
-    }
-    return;
-};
-
-export const logout = () => {
+/**
+ * Sign out the current user
+ */
+export const logout = async (): Promise<void> => {
     localStorage.removeItem('billboard_user');
+
+    if (!isSupabaseConfigured()) return;
+
+    try {
+        await supabase.auth.signOut();
+    } catch (err: any) {
+        console.error('Logout error:', err);
+    }
 };
 
-export const getCurrentUser = (): User | null => {
-    const stored = localStorage.getItem('billboard_user');
-    return stored ? JSON.parse(stored) : null;
+/**
+ * Get current user from session
+ */
+export const getCurrentUser = async (): Promise<User | null> => {
+    if (!isSupabaseConfigured()) {
+        // Fallback to mock - check localStorage
+        const stored = localStorage.getItem('billboard_user');
+        return stored ? JSON.parse(stored) : null;
+    }
+
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error || !session) return null;
+
+        const user = session.user;
+        return {
+            id: user.id,
+            email: user.email || '',
+            firstName: user.user_metadata?.firstName || '',
+            lastName: user.user_metadata?.lastName || '',
+            role: user.user_metadata?.role || 'Staff',
+            status: user.user_metadata?.status || 'Active',
+            username: user.email?.split('@')[0] || ''
+        };
+    } catch (err: any) {
+        console.error('Error getting current user:', err);
+        return null;
+    }
 };
+
+/**
+ * Send password reset email
+ */
+export const resetPassword = async (email: string): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        // Fallback to mock implementation
+        await delay(1500);
+        const user = findUser(email);
+        if (!user) {
+            throw new Error("No account found with this email address");
+        }
+        return;
+    }
+
+    try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (error) throw error;
+    } catch (err: any) {
+        throw new Error(err.message || 'Password reset failed');
+    }
+};
+
+/**
+ * Update password with reset token
+ */
+export const updatePassword = async (newPassword: string): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error("Supabase not configured");
+    }
+
+    try {
+        const { error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
+
+        if (error) throw error;
+    } catch (err: any) {
+        throw new Error(err.message || 'Password update failed');
+    }
+};
+
+/**
+ * Listen to authentication state changes
+ */
+export const onAuthStateChange = (callback: (user: User | null) => void) => {
+    if (!isSupabaseConfigured()) return () => {};
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+            const user = session.user;
+            callback({
+                id: user.id,
+                email: user.email || '',
+                firstName: user.user_metadata?.firstName || '',
+                lastName: user.user_metadata?.lastName || '',
+                role: user.user_metadata?.role || 'Staff',
+                status: user.user_metadata?.status || 'Active',
+                username: user.email?.split('@')[0] || ''
+            });
+        } else {
+            callback(null);
+        }
+    });
+
+    return () => {
+        subscription?.unsubscribe();
+    };
+};
+
+/**
+ * Invite a new user via email (Admin only)
+ */
+export const inviteUser = async (email: string, firstName: string, lastName: string, role: 'Admin' | 'Manager' | 'Staff' = 'Staff'): Promise<any> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error("User management requires Supabase to be configured");
+    }
+
+    try {
+        // Create user with temporary password
+        const tempPassword = Math.random().toString(36).slice(-12);
+        
+        const { data, error } = await supabase.auth.admin.createUser({
+            email,
+            password: tempPassword,
+            email_confirm: false, // Require email confirmation
+            user_metadata: {
+                firstName,
+                lastName,
+                role,
+                status: 'Pending'
+            }
+        });
+
+        if (error) throw error;
+
+        // TODO: Send invitation email with reset password link
+        // For now, return the temporary password
+        return { 
+            user: data.user, 
+            tempPassword,
+            message: `User invited. They should receive an email to set up their password.`
+        };
+    } catch (err: any) {
+        throw new Error(err.message || 'Failed to invite user');
+    }
+};
+
+/**
+ * Get all users (Admin only)
+ */
+export const getAllUsers = async (): Promise<User[]> => {
+    if (!isSupabaseConfigured()) {
+        // Fallback to mock data
+        return getUsers();
+    }
+
+    try {
+        const { data: { users }, error } = await supabase.auth.admin.listUsers();
+        
+        if (error) throw error;
+
+        return users.map(u => ({
+            id: u.id,
+            email: u.email || '',
+            firstName: u.user_metadata?.firstName || '',
+            lastName: u.user_metadata?.lastName || '',
+            role: u.user_metadata?.role || 'Staff',
+            status: u.user_metadata?.status || 'Active',
+            username: u.email?.split('@')[0] || ''
+        }));
+    } catch (err: any) {
+        console.error('Error fetching users:', err);
+        return [];
+    }
+};
+
+/**
+ * Update user role and status (Admin only)
+ */
+export const updateUserRole = async (userId: string, role: 'Admin' | 'Manager' | 'Staff', status: 'Active' | 'Pending' | 'Rejected' = 'Active'): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error("User management requires Supabase to be configured");
+    }
+
+    try {
+        const { error } = await supabase.auth.admin.updateUserById(userId, {
+            user_metadata: {
+                role,
+                status
+            }
+        });
+
+        if (error) throw error;
+    } catch (err: any) {
+        throw new Error(err.message || 'Failed to update user');
+    }
+};
+
+/**
+ * Delete a user (Admin only)
+ */
+export const deleteUserAccount = async (userId: string): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error("User management requires Supabase to be configured");
+    }
+
+    try {
+        const { error } = await supabase.auth.admin.deleteUser(userId);
+        if (error) throw error;
+    } catch (err: any) {
+        throw new Error(err.message || 'Failed to delete user');
+    }
+};
+
+/**
+ * Resend email confirmation to user
+ */
+export const resendConfirmationEmail = async (email: string): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error("Email confirmation requires Supabase to be configured");
+    }
+
+    try {
+        const { error } = await supabase.auth.resendEnvelope({
+            type: 'signup',
+            email
+        });
+
+        if (error) throw error;
+    } catch (err: any) {
+        throw new Error(err.message || 'Failed to resend email');
+    }
+};
+
