@@ -571,8 +571,6 @@ export const getOutsourcedBillboards = () => outsourcedBillboards || [];
 export const getPrintingJobs = () => printingJobs || [];
 export const getTasks = () => tasks || [];
 export const getMaintenanceLogs = () => maintenanceLogs || [];
-export const getCompanyLogo = () => companyLogo;
-export const getCompanyProfile = () => companyProfile;
 export const findUser = (identifier: string) => { const term = identifier.toLowerCase().trim(); return users.find(u => u.email.toLowerCase() === term || (u.username && u.username.toLowerCase() === term)); };
 export const findUserByEmail = findUser;
 export const getPendingInvoices = () => invoices.filter(inv => inv.status === 'Pending' && inv.type === 'Invoice');
