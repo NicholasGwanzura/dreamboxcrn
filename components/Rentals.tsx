@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getContracts, getBillboards, addContract, addInvoice, clients, deleteContract, subscribe } from '../services/mockData';
+import { getContracts, getBillboards, addContract, addInvoice, clients, deleteContract, subscribe, pullAllDataFromSupabase } from '../services/mockData';
 import { generateContractPDF, generateActiveContractsPDF } from '../services/pdfGenerator';
 import { generateRentalProposal } from '../services/aiService';
 import { Contract, BillboardType, VAT_RATE, Invoice } from '../types';
@@ -54,6 +54,7 @@ export const Rentals: React.FC = () => {
   const [rentalToDelete, setRentalToDelete] = useState<Contract | null>(null);
   const [aiProposal, setAiProposal] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPullingData, setIsPullingData] = useState(false);
 
   // Gantt State
   const [ganttDate, setGanttDate] = useState(new Date());
@@ -346,6 +347,9 @@ export const Rentals: React.FC = () => {
             <p className="text-slate-500 font-medium text-sm sm:text-base">Active contracts, renewals, and availability</p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button onClick={async () => { setIsPullingData(true); try { const success = await pullAllDataFromSupabase(); if (success) alert('✅ Data synced!'); else alert('⚠️ Sync failed'); } catch(e) { alert('❌ Error: '+e); } finally { setIsPullingData(false); } }} disabled={isPullingData} className="bg-indigo-600 border border-indigo-700 text-white px-4 py-3 rounded-full text-sm font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50">
+                  <RefreshCw size={18} className={isPullingData ? 'animate-spin' : ''}/> {isPullingData ? 'Syncing...' : 'Pull Data'}
+              </button>
               <button onClick={() => generateActiveContractsPDF(rentals, getClientName, getBillboardName)} className="bg-white border border-slate-200 text-slate-600 px-4 py-3 rounded-full text-sm font-bold uppercase tracking-wider hover:bg-slate-50 transition-all flex items-center gap-2">
                   <Download size={18}/> Report
               </button>

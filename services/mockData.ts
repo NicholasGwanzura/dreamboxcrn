@@ -454,6 +454,15 @@ export const addContract = (contract: Contract) => {
     notifyListeners();
 };
 
+export const updateContract = (updated: Contract) => {
+    contracts = contracts.map(c => c.id === updated.id ? updated : c);
+    saveToStorage(STORAGE_KEYS.CONTRACTS, contracts);
+    syncToSupabase('contracts', updated);
+    syncToCloudMirror();
+    logAction('Update Contract', `Updated contract ${updated.id}`);
+    notifyListeners();
+};
+
 export const deleteContract = (id: string) => {
     const contract = contracts.find(c => c.id === id);
     if(contract) {
@@ -480,6 +489,7 @@ export const deleteContract = (id: string) => {
 };
 
 export const addInvoice = (invoice: Invoice) => { invoices = [invoice, ...invoices]; saveToStorage(STORAGE_KEYS.INVOICES, invoices); syncToCloudMirror(); syncToSupabase('invoices', invoice); logAction('Create Invoice', `Created ${invoice.type} #${invoice.id} ($${invoice.total})`); notifyListeners(); };
+export const updateInvoice = (updated: Invoice) => { invoices = invoices.map(i => i.id === updated.id ? updated : i); saveToStorage(STORAGE_KEYS.INVOICES, invoices); syncToCloudMirror(); syncToSupabase('invoices', updated); logAction('Update Invoice', `Updated ${updated.type} #${updated.id}`); notifyListeners(); };
 export const markInvoiceAsPaid = (id: string) => { invoices = invoices.map(i => i.id === id ? { ...i, status: 'Paid' } : i); saveToStorage(STORAGE_KEYS.INVOICES, invoices); syncToCloudMirror(); const updated = invoices.find(i => i.id === id); if(updated) syncToSupabase('invoices', updated); logAction('Payment', `Marked Invoice #${id} as Paid`); notifyListeners(); };
 
 export const deleteInvoice = (id: string) => {
@@ -510,19 +520,26 @@ export const deleteInvoice = (id: string) => {
 };
 
 export const addExpense = (expense: Expense) => { expenses = [expense, ...expenses]; saveToStorage(STORAGE_KEYS.EXPENSES, expenses); syncToCloudMirror(); syncToSupabase('expenses', expense); logAction('Expense', `Recorded expense: ${expense.description} ($${expense.amount})`); notifyListeners(); };
+export const updateExpense = (updated: Expense) => { expenses = expenses.map(e => e.id === updated.id ? updated : e); saveToStorage(STORAGE_KEYS.EXPENSES, expenses); syncToCloudMirror(); syncToSupabase('expenses', updated); logAction('Update Expense', `Updated expense: ${updated.description}`); notifyListeners(); };
+export const deleteExpense = (id: string) => { const target = expenses.find(e => e.id === id); if (target) { expenses = expenses.filter(e => e.id !== id); saveToStorage(STORAGE_KEYS.EXPENSES, expenses); syncToCloudMirror(); queueForDeletion('expenses', id); logAction('Delete Expense', `Removed expense: ${target.description}`); notifyListeners(); } };
 export const addClient = (client: Client) => { clients = [...clients, client]; saveToStorage(STORAGE_KEYS.CLIENTS, clients); syncToCloudMirror(); syncToSupabase('clients', client); logAction('Create Client', `Added ${client.companyName}`); notifyListeners(); };
 export const updateClient = (updated: Client) => { clients = clients.map(c => c.id === updated.id ? updated : c); saveToStorage(STORAGE_KEYS.CLIENTS, clients); syncToCloudMirror(); syncToSupabase('clients', updated); logAction('Update Client', `Updated info for ${updated.companyName}`); notifyListeners(); };
 export const deleteClient = (id: string) => { const target = clients.find(c => c.id === id); if (target) { clients = clients.filter(c => c.id !== id); saveToStorage(STORAGE_KEYS.CLIENTS, clients); syncToCloudMirror(); queueForDeletion('clients', id); logAction('Delete Client', `Removed ${target.companyName}`); notifyListeners(); } };
 export const addUser = (user: User) => { users = [...users, user]; saveToStorage(STORAGE_KEYS.USERS, users); syncToCloudMirror(); syncToSupabase('users', user); logAction('User Mgmt', `Added user ${user.email} (Status: ${user.status})`); notifyListeners(); };
 export const updateUser = (updated: User) => { users = users.map(u => u.id === updated.id ? updated : u); saveToStorage(STORAGE_KEYS.USERS, users); syncToCloudMirror(); syncToSupabase('users', updated); logAction('User Mgmt', `Updated user ${updated.email}`); notifyListeners(); };
 export const deleteUser = (id: string) => { users = users.filter(u => u.id !== id); saveToStorage(STORAGE_KEYS.USERS, users); syncToCloudMirror(); queueForDeletion('users', id); logAction('User Mgmt', `Deleted user ID ${id}`); notifyListeners(); };
-export const addOutsourcedBillboard = (b: OutsourcedBillboard) => { outsourcedBillboards = [...outsourcedBillboards, b]; saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); syncToCloudMirror(); logAction('Outsourcing', `Added outsourced unit ${b.billboardId}`); notifyListeners(); };
-export const updateOutsourcedBillboard = (updated: OutsourcedBillboard) => { outsourcedBillboards = outsourcedBillboards.map(b => b.id === updated.id ? updated : b); saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); syncToCloudMirror(); notifyListeners(); };
-export const deleteOutsourcedBillboard = (id: string) => { outsourcedBillboards = outsourcedBillboards.filter(b => b.id !== id); saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); syncToCloudMirror(); notifyListeners(); };
+export const addOutsourcedBillboard = (b: OutsourcedBillboard) => { outsourcedBillboards = [...outsourcedBillboards, b]; saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); syncToSupabase('outsourced_billboards', b); syncToCloudMirror(); logAction('Outsourcing', `Added outsourced unit ${b.billboardId}`); notifyListeners(); };
+export const updateOutsourcedBillboard = (updated: OutsourcedBillboard) => { outsourcedBillboards = outsourcedBillboards.map(b => b.id === updated.id ? updated : b); saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); syncToSupabase('outsourced_billboards', updated); syncToCloudMirror(); logAction('Update Outsourced', `Updated outsourced billboard ${updated.id}`); notifyListeners(); };
+export const deleteOutsourcedBillboard = (id: string) => { const target = outsourcedBillboards.find(b => b.id === id); if (target) { outsourcedBillboards = outsourcedBillboards.filter(b => b.id !== id); saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards); queueForDeletion('outsourced_billboards', id); syncToCloudMirror(); logAction('Delete Outsourced', `Removed outsourced billboard ${id}`); notifyListeners(); } };
 export const addTask = (task: Task) => { tasks = [task, ...tasks]; saveToStorage(STORAGE_KEYS.TASKS, tasks); syncToCloudMirror(); syncToSupabase('tasks', task); logAction('Task Created', `New task: ${task.title}`); notifyListeners(); };
 export const updateTask = (updated: Task) => { tasks = tasks.map(t => t.id === updated.id ? updated : t); saveToStorage(STORAGE_KEYS.TASKS, tasks); syncToCloudMirror(); syncToSupabase('tasks', updated); notifyListeners(); };
 export const deleteTask = (id: string) => { const target = tasks.find(t => t.id === id); if(target) { tasks = tasks.filter(t => t.id !== id); saveToStorage(STORAGE_KEYS.TASKS, tasks); syncToCloudMirror(); queueForDeletion('tasks', id); logAction('Task Deleted', `Removed task: ${target.title}`); notifyListeners(); } };
+export const addPrintingJob = (job: PrintingJob) => { printingJobs = [...printingJobs, job]; saveToStorage(STORAGE_KEYS.PRINTING, printingJobs); syncToSupabase('printing_jobs', job); syncToCloudMirror(); logAction('Printing Job', `Added printing job: ${job.description}`); notifyListeners(); };
+export const updatePrintingJob = (updated: PrintingJob) => { printingJobs = printingJobs.map(p => p.id === updated.id ? updated : p); saveToStorage(STORAGE_KEYS.PRINTING, printingJobs); syncToSupabase('printing_jobs', updated); syncToCloudMirror(); logAction('Update Printing', `Updated printing job ${updated.id}`); notifyListeners(); };
+export const deletePrintingJob = (id: string) => { const target = printingJobs.find(p => p.id === id); if (target) { printingJobs = printingJobs.filter(p => p.id !== id); saveToStorage(STORAGE_KEYS.PRINTING, printingJobs); queueForDeletion('printing_jobs', id); syncToCloudMirror(); logAction('Delete Printing', `Removed printing job ${id}`); notifyListeners(); } };
 export const addMaintenanceLog = (log: MaintenanceLog) => { maintenanceLogs = [log, ...maintenanceLogs]; saveToStorage(STORAGE_KEYS.MAINTENANCE, maintenanceLogs); syncToSupabase('maintenance_logs', log); const billboard = billboards.find(b => b.id === log.billboardId); if (billboard) { billboard.lastMaintenanceDate = log.date; updateBillboard(billboard); } syncToCloudMirror(); logAction('Maintenance', `Logged maintenance for ${billboard?.name || log.billboardId}`); notifyListeners(); };
+export const updateMaintenanceLog = (updated: MaintenanceLog) => { maintenanceLogs = maintenanceLogs.map(m => m.id === updated.id ? updated : m); saveToStorage(STORAGE_KEYS.MAINTENANCE, maintenanceLogs); syncToSupabase('maintenance_logs', updated); syncToCloudMirror(); logAction('Update Maintenance', `Updated maintenance log ${updated.id}`); notifyListeners(); };
+export const deleteMaintenanceLog = (id: string) => { const target = maintenanceLogs.find(m => m.id === id); if (target) { maintenanceLogs = maintenanceLogs.filter(m => m.id !== id); saveToStorage(STORAGE_KEYS.MAINTENANCE, maintenanceLogs); syncToCloudMirror(); queueForDeletion('maintenance_logs', id); logAction('Delete Maintenance', `Removed maintenance log ${id}`); notifyListeners(); } };
 
 export const RELEASE_NOTES = [
     {
@@ -546,6 +563,7 @@ export const getAuditLogs = () => auditLogs || [];
 export const getUsers = () => users || [];
 export const getClients = () => clients || [];
 export const getOutsourcedBillboards = () => outsourcedBillboards || [];
+export const getPrintingJobs = () => printingJobs || [];
 export const getTasks = () => tasks || [];
 export const getMaintenanceLogs = () => maintenanceLogs || [];
 export const getCompanyLogo = () => companyLogo;

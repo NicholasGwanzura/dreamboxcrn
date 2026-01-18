@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Billboard, BillboardType, Client, Contract } from '../types';
-import { getBillboards, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe } from '../services/mockData';
+import { getBillboards, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase } from '../services/mockData';
 import { analyzeBillboardLocation } from '../services/aiService';
 import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, Sparkles, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe } from 'lucide-react';
 import L from 'leaflet';
@@ -205,6 +205,7 @@ export const BillboardList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientView, setIsClientView] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [isPullingData, setIsPullingData] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const pickerMapRef = useRef<L.Map | null>(null);
@@ -397,6 +398,22 @@ export const BillboardList: React.FC = () => {
       alert("Public Share Link copied to clipboard!\nAnyone with this link can view this billboard details."); 
   };
 
+  const handlePullData = async () => {
+    setIsPullingData(true);
+    try {
+      const success = await pullAllDataFromSupabase();
+      if (success) {
+        alert('✅ Data synced successfully from Supabase!');
+      } else {
+        alert('⚠️ Failed to sync data. Check console for details.');
+      }
+    } catch (error) {
+      alert('❌ Error syncing data: ' + error);
+    } finally {
+      setIsPullingData(false);
+    }
+  };
+
   const shareMap = () => {
       const url = `${window.location.origin}${window.location.pathname}?public=true&type=map`;
       navigator.clipboard.writeText(url);
@@ -558,6 +575,10 @@ export const BillboardList: React.FC = () => {
                     <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-full transition-all ${viewMode === 'list' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`} title="List View"><ListIcon size={18} /></button>
                     <button onClick={() => setViewMode('map')} className={`p-2.5 rounded-full transition-all ${viewMode === 'map' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`} title="Map View"><MapIcon size={18} /></button>
                 </div>
+                
+                <button onClick={handlePullData} disabled={isPullingData} className="bg-indigo-600 border border-indigo-700 text-white px-4 py-2.5 rounded-full text-sm font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50 shadow-lg" title="Sync data from Supabase">
+                    <RefreshCw size={18} className={isPullingData ? 'animate-spin' : ''}/> {isPullingData ? 'Syncing...' : 'Pull Data'}
+                </button>
                 
                 <div className="flex bg-white/80 backdrop-blur-sm rounded-full border border-slate-200 p-1 shadow-sm items-center">
                     <button onClick={downloadTemplate} className="p-2.5 rounded-full text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="Download CSV Template"><Download size={18}/></button>
