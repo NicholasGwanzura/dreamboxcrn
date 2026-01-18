@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { getContracts, getBillboards, addContract, addInvoice, clients, deleteContract, subscribe, pullAllDataFromSupabase } from '../services/mockData';
 import { generateContractPDF, generateActiveContractsPDF } from '../services/pdfGenerator';
-import { generateRentalProposal } from '../services/aiService';
 import { Contract, BillboardType, VAT_RATE, Invoice } from '../types';
-import { FileText, Calendar, Download, Eye, Plus, X, Wand2, RefreshCw, CheckCircle, Trash2, AlertTriangle, GanttChart, List, Lock } from 'lucide-react';
+import { FileText, Calendar, Download, Eye, Plus, X, RefreshCw, CheckCircle, Trash2, AlertTriangle, GanttChart, List, Lock } from 'lucide-react';
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false, disabled = false }: any) => {
   const isDate = type === 'date';
@@ -52,8 +51,6 @@ export const Rentals: React.FC = () => {
   const [selectedRental, setSelectedRental] = useState<Contract | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [rentalToDelete, setRentalToDelete] = useState<Contract | null>(null);
-  const [aiProposal, setAiProposal] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isPullingData, setIsPullingData] = useState(false);
 
   // Gantt State
@@ -223,16 +220,6 @@ export const Rentals: React.FC = () => {
     setIsCreateModalOpen(false);
     setNewRental({ clientId: '', billboardId: '', side: 'A', slotNumber: 1, startDate: '', endDate: '', monthlyRate: 0, installationCost: 0, printingCost: 0, hasVat: true });
     alert("Success! Rental Active & Initial Invoice Generated.");
-  };
-
-  const handleGenerateProposal = async () => {
-    if (!newRental.clientId || !newRental.billboardId) { alert("Please select a Client and Billboard first."); return; }
-    setIsGenerating(true);
-    const client = getClient(newRental.clientId)!;
-    const billboard = getBillboard(newRental.billboardId)!;
-    const proposal = await generateRentalProposal(client, billboard, newRental.monthlyRate);
-    setAiProposal(proposal);
-    setIsGenerating(false);
   };
 
   const confirmDelete = () => {
@@ -507,21 +494,6 @@ export const Rentals: React.FC = () => {
                                 Generate Contract & Invoice
                             </button>
                         </form>
-                        <div className="p-8 bg-slate-50/50 flex flex-col">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="p-2 bg-purple-100 rounded-lg text-purple-600"><Wand2 size={20}/></div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800">AI Proposal Draft</h4>
-                                    <p className="text-xs text-slate-500">Generate a pitch email for this rental</p>
-                                </div>
-                            </div>
-                            <div className="flex-1 bg-white rounded-xl border border-slate-200 p-4 shadow-inner mb-4 overflow-y-auto min-h-[200px] text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                                {aiProposal || "Select a client and billboard, then click 'Generate' to create a professional pitch draft..."}
-                            </div>
-                            <button type="button" onClick={handleGenerateProposal} disabled={isGenerating} className="w-full py-3 bg-white border border-slate-200 text-slate-700 font-bold uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
-                                {isGenerating ? <RefreshCw size={16} className="animate-spin"/> : <Wand2 size={16} />} {isGenerating ? 'Drafting...' : 'Generate Proposal'}
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>

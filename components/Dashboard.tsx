@@ -4,20 +4,12 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie, ComposedChart, Line
 } from 'recharts';
-import { DollarSign, FileText, Activity, Users, Sparkles, TrendingUp, Bell, AlertTriangle, Calendar, ArrowRight, BrainCircuit, Newspaper, X } from 'lucide-react';
+import { DollarSign, FileText, Activity, Users, TrendingUp, Bell, AlertTriangle, Calendar, CheckCircle } from 'lucide-react';
 import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe } from '../services/mockData';
 import { BillboardType } from '../types';
-import { analyzeBusinessData, generateGreeting, fetchIndustryNews } from '../services/aiService';
 import { getCurrentUser } from '../services/authService';
 
 export const Dashboard: React.FC = () => {
-  const [aiQuery, setAiQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [greeting, setGreeting] = useState('');
-  const [news, setNews] = useState<Array<{ title: string; summary: string; source?: string; date?: string }>>([]);
-  const [selectedNews, setSelectedNews] = useState<{ title: string; summary: string; source?: string; date?: string } | null>(null);
-  
   // State for live updates
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -29,23 +21,6 @@ export const Dashboard: React.FC = () => {
           setRefreshKey(prev => prev + 1);
       });
       return () => { unsubscribe(); };
-  }, []);
-
-  useEffect(() => {
-      const fetchGreeting = async () => {
-          if (currentUser?.firstName) {
-              const greet = await generateGreeting(currentUser.firstName);
-              setGreeting(greet);
-          }
-      };
-      
-      const loadNews = async () => {
-          const newsItems = await fetchIndustryNews();
-          setNews(newsItems);
-      };
-
-      fetchGreeting();
-      loadNews();
   }, []);
 
   // Live Data (re-fetched on refreshKey change)
@@ -99,64 +74,12 @@ export const Dashboard: React.FC = () => {
       return acc;
   }, []).sort((a: any, b: any) => b.value - a.value).slice(0, 5);
 
-  const handleAskAI = async (e?: React.FormEvent) => {
-      if(e) e.preventDefault();
-      if(!aiQuery) return;
-      setLoadingAi(true);
-      const context = `Revenue: $${totalRevenue}. Occupancy: ${occupancyRate}%. Active Contracts: ${activeContracts}. Expiring (30d): ${expiringContracts.length}. Overdue: ${overdueInvoices.length}. Top Client: ${topClientsData[0]?.name}. User Q: ${aiQuery}`;
-      const result = await analyzeBusinessData(context);
-      setAiResponse(result);
-      setLoadingAi(false);
-  };
-
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Unknown';
 
   return (
     <div className="space-y-8 animate-fade-in pb-12 flex flex-col xl:flex-row gap-8 relative">
       {/* Main Content Area */}
       <div className="flex-1 space-y-8 min-w-0">
-        
-        {/* AI Analyst Section - Dreambox Gradient (Indigo/Violet) */}
-        <div className="bg-gradient-to-br from-slate-900 via-[#1e1b4b] to-indigo-950 rounded-3xl p-8 text-white shadow-2xl shadow-indigo-900/20 relative overflow-hidden group border border-slate-700/50">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 group-hover:bg-indigo-600/20 transition-all duration-1000"></div>
-            
-            <div className="relative z-10">
-                {greeting && (
-                    <div className="mb-4 text-indigo-300 font-medium text-sm uppercase tracking-wider flex items-center gap-2">
-                        <Sparkles size={14} className="text-indigo-400" /> {greeting}
-                    </div>
-                )}
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md border border-white/10 shadow-inner"><BrainCircuit size={24} className="text-indigo-400"/></div>
-                    <div>
-                        <h2 className="text-2xl font-bold tracking-tight">Dreambox AI</h2>
-                        <p className="text-slate-400 text-sm">Strategic intelligence for your fleet</p>
-                    </div>
-                </div>
-                
-                <form onSubmit={handleAskAI} className="relative max-w-2xl mb-6">
-                    <input 
-                        type="text" 
-                        value={aiQuery}
-                        onChange={(e) => setAiQuery(e.target.value)}
-                        placeholder="Ask about revenue trends, occupancy, or strategy..." 
-                        className="w-full pl-6 pr-14 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder-slate-500 backdrop-blur-md focus:outline-none focus:bg-white/10 focus:border-indigo-500/50 transition-all shadow-lg shadow-black/10"
-                    />
-                    <button type="submit" disabled={loadingAi} className="absolute right-2 top-2 p-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all disabled:opacity-70 disabled:cursor-not-allowed active:scale-95">
-                        {loadingAi ? <Sparkles size={20} className="animate-spin"/> : <ArrowRight size={20} />}
-                    </button>
-                </form>
-
-                {aiResponse && (
-                    <div className="p-6 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md animate-fade-in shadow-inner">
-                        <div className="flex items-start gap-3">
-                            <Sparkles size={18} className="text-indigo-400 mt-1 shrink-0 animate-pulse"/>
-                            <p className="text-sm leading-relaxed text-slate-100 font-medium">{aiResponse}</p>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -347,7 +270,7 @@ export const Dashboard: React.FC = () => {
                  {/* Alerts List */}
                  {expiringContracts.length === 0 && overdueInvoices.length === 0 ? (
                     <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600"><Sparkles size={20}/></div>
+                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600"><CheckCircle size={20}/></div>
                         <p className="text-sm font-medium text-slate-500">All caught up!</p>
                         <p className="text-xs text-slate-400">No pending alerts.</p>
                     </div>
@@ -383,30 +306,6 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-             <div className="flex items-center gap-2 mb-6">
-                 <Newspaper size={16} className="text-indigo-500" />
-                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Zimbabwe News</h3>
-             </div>
-             <div className="space-y-4">
-                 {news.length > 0 ? (
-                     news.map((item, idx) => (
-                         <div key={idx} className="group cursor-pointer" onClick={() => setSelectedNews(item)}>
-                             <div className="flex justify-between items-start mb-1">
-                                 <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{item.source || 'Industry'}</span>
-                                 <span className="text-[9px] text-slate-400 font-mono">{item.date}</span>
-                             </div>
-                             <h4 className="text-sm font-bold text-slate-800 leading-tight mb-1 group-hover:text-indigo-600 transition-colors">{item.title}</h4>
-                             <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{item.summary}</p>
-                             {idx < news.length - 1 && <div className="border-b border-slate-50 mt-4"></div>}
-                         </div>
-                     ))
-                 ) : (
-                     <div className="text-center py-8 text-slate-400 text-xs italic">Loading latest updates...</div>
-                 )}
-             </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Revenue Sources</h3>
              <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
@@ -426,32 +325,6 @@ export const Dashboard: React.FC = () => {
           </div>
       </div>
 
-      {selectedNews && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-fade-in" onClick={() => setSelectedNews(null)}>
-            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-100 overflow-hidden relative" onClick={e => e.stopPropagation()}>
-                <div className="relative h-32 bg-slate-900 overflow-hidden">
-                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700 opacity-90"></div>
-                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Newspaper size={48} className="text-white/20" />
-                     </div>
-                     <button onClick={() => setSelectedNews(null)} className="absolute top-4 right-4 p-2 bg-black/20 text-white rounded-full hover:bg-black/40 transition-colors backdrop-blur-sm"><X size={20}/></button>
-                </div>
-                <div className="p-8 -mt-6 relative z-10 bg-white rounded-t-3xl">
-                    <div className="flex items-center gap-3 mb-4">
-                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 uppercase tracking-wider">{selectedNews.source}</span>
-                        <span className="text-xs text-slate-400 font-mono">{selectedNews.date}</span>
-                    </div>
-                    <h3 className="text-2xl font-black text-slate-900 mb-6 leading-tight">{selectedNews.title}</h3>
-                    <div className="prose prose-slate prose-sm text-slate-600 leading-relaxed">
-                        {selectedNews.summary}
-                    </div>
-                    <div className="mt-8 pt-6 border-t border-slate-50 flex justify-end">
-                        <button onClick={() => setSelectedNews(null)} className="px-6 py-2.5 bg-slate-900 text-white text-sm font-bold uppercase tracking-wider rounded-xl hover:bg-slate-800 transition-colors shadow-lg">Close Article</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
     </div>
   );
 };

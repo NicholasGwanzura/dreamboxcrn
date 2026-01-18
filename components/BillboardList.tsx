@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Billboard, BillboardType, Client, Contract } from '../types';
 import { getBillboards, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase } from '../services/mockData';
-import { analyzeBillboardLocation } from '../services/aiService';
-import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, Sparkles, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe } from 'lucide-react';
+import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe } from 'lucide-react';
 import L from 'leaflet';
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false }: any) => (
@@ -165,19 +164,6 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
                     </div>
                 </div>
 
-                {/* AI Insight Pill */}
-                {billboard.visibility && (
-                    <div className="mb-6 bg-gradient-to-r from-slate-50 to-white border border-slate-100 p-4 rounded-2xl relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
-                        <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                            <Sparkles size={10} fill="currentColor"/> AI Analysis
-                        </p>
-                        <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                            {billboard.visibility}
-                        </p>
-                    </div>
-                )}
-
                 {/* Action Bar */}
                 <div className="mt-auto flex items-center justify-between pt-4 gap-3">
                     <span className="text-[10px] font-mono text-slate-300 bg-slate-50 px-2 py-1 rounded-md">ID: {billboard.id.slice(-4)}</span>
@@ -215,7 +201,6 @@ export const BillboardList: React.FC = () => {
   const [editingBillboard, setEditingBillboard] = useState<Billboard | null>(null);
   const [billboardToDelete, setBillboardToDelete] = useState<Billboard | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [pickingLocation, setPickingLocation] = useState(false);
   
@@ -363,31 +348,6 @@ export const BillboardList: React.FC = () => {
         };
         reader.readAsDataURL(file);
     }
-  };
-  const handleAutoAnalyze = async (isEdit: boolean) => {
-      const target = isEdit ? editingBillboard : newBillboard;
-      if (!target?.location || !target?.town) { alert("Please enter Location and Town first."); return; }
-      
-      setIsAnalyzing(true);
-      const result = await analyzeBillboardLocation(target.location, target.town);
-      setIsAnalyzing(false);
-      
-      const updates = { 
-          visibility: result.visibility, 
-          dailyTraffic: result.dailyTraffic,
-          // Only update coords if AI returned them
-          ...(result.coordinates ? { coordinates: result.coordinates } : {})
-      };
-      
-      if (isEdit && editingBillboard) {
-          setEditingBillboard({ ...editingBillboard, ...updates });
-      } else {
-          setNewBillboard({ ...newBillboard, ...updates });
-      }
-      
-      if(result.coordinates) {
-          alert(`AI Analysis Complete!\nCoordinates found: ${result.coordinates.lat}, ${result.coordinates.lng}`);
-      }
   };
 
   const getClientName = (clientId?: string) => { if(!clientId) return 'Available'; return clients.find(c => c.id === clientId)?.companyName || 'Unknown'; };
@@ -764,22 +724,19 @@ export const BillboardList: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Analysis Section */}
-                        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-2xl border border-indigo-100 relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-4 relative z-10">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-500 flex items-center gap-2"><Sparkles size={14}/> Analysis & Traffic</h4>
-                                <button type="button" onClick={() => handleAutoAnalyze(false)} disabled={isAnalyzing} className="text-[10px] bg-white text-indigo-600 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider shadow-sm border border-indigo-100 hover:shadow-md transition-all flex items-center gap-2 disabled:opacity-50">
-                                    {isAnalyzing ? <RefreshCw size={12} className="animate-spin"/> : <Sparkles size={12}/>} {isAnalyzing ? 'Analyzing...' : 'Auto-Generate'}
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                                <div className="md:col-span-2">
-                                    <MinimalInput label="Visibility Notes (AI)" value={newBillboard.visibility} onChange={(e: any) => setNewBillboard({...newBillboard, visibility: e.target.value})} />
-                                </div>
-                                <div>
-                                    <MinimalInput label="Est. Daily Traffic" type="number" value={newBillboard.dailyTraffic} onChange={(e: any) => setNewBillboard({...newBillboard, dailyTraffic: Number(e.target.value)})} />
-                                </div>
-                            </div>
+                        <div className="space-y-4">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                            <textarea 
+                                value={newBillboard.visibility} 
+                                onChange={(e: any) => setNewBillboard({...newBillboard, visibility: e.target.value})} 
+                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium resize-none"
+                                rows={2}
+                                placeholder="Optional visibility and location notes..."
+                            />
+                        </div>
+
+                        <div className="space-y-4">
+                            <MinimalInput label="Est. Daily Traffic" type="number" value={newBillboard.dailyTraffic} onChange={(e: any) => setNewBillboard({...newBillboard, dailyTraffic: Number(e.target.value)})} />
                         </div>
 
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-[1.02]">
@@ -881,22 +838,19 @@ export const BillboardList: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Analysis Section */}
-                        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-2xl border border-indigo-100 relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-4 relative z-10">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-500 flex items-center gap-2"><Sparkles size={14}/> Analysis & Traffic</h4>
-                                <button type="button" onClick={() => handleAutoAnalyze(true)} disabled={isAnalyzing} className="text-[10px] bg-white text-indigo-600 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider shadow-sm border border-indigo-100 hover:shadow-md transition-all flex items-center gap-2 disabled:opacity-50">
-                                    {isAnalyzing ? <RefreshCw size={12} className="animate-spin"/> : <Sparkles size={12}/>} {isAnalyzing ? 'Analyzing...' : 'Auto-Generate'}
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                                <div className="md:col-span-2">
-                                    <MinimalInput label="Visibility Notes (AI)" value={editingBillboard.visibility} onChange={(e: any) => setEditingBillboard({...editingBillboard, visibility: e.target.value})} />
-                                </div>
-                                <div>
-                                    <MinimalInput label="Est. Daily Traffic" type="number" value={editingBillboard.dailyTraffic} onChange={(e: any) => setEditingBillboard({...editingBillboard, dailyTraffic: Number(e.target.value)})} />
-                                </div>
-                            </div>
+                        <div className="space-y-4">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                            <textarea 
+                                value={editingBillboard.visibility} 
+                                onChange={(e: any) => setEditingBillboard({...editingBillboard, visibility: e.target.value})} 
+                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-medium resize-none"
+                                rows={2}
+                                placeholder="Optional visibility and location notes..."
+                            />
+                        </div>
+
+                        <div className="space-y-4">
+                            <MinimalInput label="Est. Daily Traffic" type="number" value={editingBillboard.dailyTraffic} onChange={(e: any) => setEditingBillboard({...editingBillboard, dailyTraffic: Number(e.target.value)})} />
                         </div>
                         
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-[1.02]">
