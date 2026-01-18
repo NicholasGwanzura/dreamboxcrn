@@ -2,7 +2,7 @@ import { supabase, isSupabaseConfigured as checkSupabaseConfigured } from './sup
 import { User } from '../types';
 
 // Fallback mock data for local development without Supabase
-import { getUsers, addUser, findUser, fetchLatestUsers } from './mockData';
+import { getUsers, addUser, findUser, fetchLatestUsers, pullAllDataFromSupabase } from './mockData';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -130,7 +130,7 @@ export const login = async (identifier: string, password: string): Promise<User 
 
         // Return user data from session
         if (data.user) {
-            return {
+            const userData = {
                 id: data.user.id,
                 email: data.user.email || '',
                 firstName: data.user.user_metadata?.firstName || '',
@@ -139,6 +139,27 @@ export const login = async (identifier: string, password: string): Promise<User 
                 status: data.user.user_metadata?.status || 'Active',
                 username: data.user.email?.split('@')[0] || ''
             };
+
+            // Store user session
+            try {
+                localStorage.setItem('billboard_user', JSON.stringify(userData));
+            } catch (e) {
+                console.warn('Failed to save user session to localStorage');
+            }
+
+            // Pull all data from Supabase after successful login
+            console.log('🔄 Fetching latest data from Supabase...');
+            pullAllDataFromSupabase().then(success => {
+                if (success) {
+                    console.log('✅ All data synced from Supabase');
+                } else {
+                    console.warn('⚠️ Some data may not have synced');
+                }
+            }).catch(err => {
+                console.error('❌ Error syncing data:', err);
+            });
+
+            return userData;
         }
         return null;
     } catch (err: any) {

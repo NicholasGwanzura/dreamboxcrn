@@ -134,6 +134,89 @@ export const syncToSupabase = async (table: string, data: any) => {
     try { const { error } = await supabase.from(table).upsert(data); if (error) console.error(`Supabase Sync Error (${table}):`, error); } catch (e) { console.error(`Supabase Exception (${table}):`, e); }
 };
 
+/**
+ * Pull all records from Supabase and persist them locally
+ * This runs on login to ensure local data is in sync with cloud
+ */
+export const pullAllDataFromSupabase = async (): Promise<boolean> => {
+    if (!supabase) {
+        console.warn('Supabase not configured, skipping data pull');
+        return false;
+    }
+
+    try {
+        console.log('🔄 Pulling all data from Supabase...');
+        let syncedTables = 0;
+
+        // Fetch and sync all tables
+        const tables = [
+            { name: 'billboards', setter: (data: any[]) => { billboards = data; saveToStorage(STORAGE_KEYS.BILLBOARDS, data); } },
+            { name: 'clients', setter: (data: any[]) => { clients = data; saveToStorage(STORAGE_KEYS.CLIENTS, data); } },
+            { name: 'contracts', setter: (data: any[]) => { contracts = data; saveToStorage(STORAGE_KEYS.CONTRACTS, data); } },
+            { name: 'invoices', setter: (data: any[]) => { invoices = data; saveToStorage(STORAGE_KEYS.INVOICES, data); } },
+            { name: 'expenses', setter: (data: any[]) => { expenses = data; saveToStorage(STORAGE_KEYS.EXPENSES, data); } },
+            { name: 'users', setter: (data: any[]) => { users = data; saveToStorage(STORAGE_KEYS.USERS, data); } },
+            { name: 'tasks', setter: (data: any[]) => { tasks = data; saveToStorage(STORAGE_KEYS.TASKS, data); } },
+            { name: 'maintenance_logs', setter: (data: any[]) => { maintenanceLogs = data; saveToStorage(STORAGE_KEYS.MAINTENANCE, data); } },
+            { name: 'outsourced_billboards', setter: (data: any[]) => { outsourcedBillboards = data; saveToStorage(STORAGE_KEYS.OUTSOURCED, data); } },
+            { name: 'printing_jobs', setter: (data: any[]) => { printingJobs = data; saveToStorage(STORAGE_KEYS.PRINTING, data); } },
+        ];
+
+        for (const table of tables) {
+            try {
+                const { data, error } = await supabase.from(table.name).select('*');
+                if (error) {
+                    console.warn(`⚠️ Error fetching ${table.name}:`, error.message);
+                    continue;
+                }
+                if (data && data.length > 0) {
+                    table.setter(data);
+                    syncedTables++;
+                    console.log(`✅ Synced ${data.length} records from ${table.name}`);
+                } else {
+                    console.log(`ℹ️ No data in ${table.name}`);
+                }
+            } catch (e: any) {
+                console.error(`❌ Exception fetching ${table.name}:`, e.message);
+            }
+        }
+
+        // Fetch company profile separately (single record)
+        try {
+            const { data: profileData, error: profileError } = await supabase
+                .from('company_profile')
+                .select('*')
+                .eq('id', 'profile_v1')
+                .single();
+            
+            if (!profileError && profileData) {
+                companyProfile = {
+                    name: profileData.name || companyProfile.name,
+                    address: profileData.address || companyProfile.address,
+                    phone: profileData.phone || companyProfile.phone,
+                    email: profileData.email || companyProfile.email,
+                    website: profileData.website || companyProfile.website,
+                };
+                if (profileData.logo) {
+                    companyLogo = profileData.logo;
+                    saveToStorage(STORAGE_KEYS.LOGO, companyLogo);
+                }
+                saveToStorage(STORAGE_KEYS.PROFILE, companyProfile);
+                console.log('✅ Synced company profile');
+            }
+        } catch (e) {
+            console.log('ℹ️ No company profile found');
+        }
+
+        notifyListeners();
+        console.log(`✅ Data pull complete! Synced ${syncedTables} tables from Supabase`);
+        return true;
+    } catch (error: any) {
+        console.error('❌ Failed to pull data from Supabase:', error.message);
+        return false;
+    }
+};
+
 export const fetchLatestUsers = async () => {
     if (!supabase) return null;
     try {
