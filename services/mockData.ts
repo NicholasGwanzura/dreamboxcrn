@@ -9,6 +9,9 @@ export const ZIM_TOWNS = [
 // --- Global Subscription System for Real-time Updates ---
 const listeners = new Set<() => void>();
 
+// Track if Supabase sync has completed (Supabase = source of truth)
+let supabaseSyncComplete = false;
+
 export const subscribe = (listener: () => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -137,18 +140,19 @@ export const syncToSupabase = async (table: string, data: any) => {
 /**
  * Pull all records from Supabase and persist them locally
  * This runs on login to ensure local data is in sync with cloud
+ * RULE: Supabase is ALWAYS the source of truth - localStorage is just cache
  */
 export const pullAllDataFromSupabase = async (): Promise<boolean> => {
     if (!supabase) {
-        console.warn('Supabase not configured, skipping data pull');
+        console.warn('Supabase not configured, using localStorage fallback');
         return false;
     }
 
     try {
-        console.log('🔄 Pulling all data from Supabase...');
+        console.log('🔄 Pulling all data from Supabase (PRIORITY: CLOUD)...');
         let syncedTables = 0;
 
-        // Fetch and sync all tables
+        // Fetch and sync all tables - SUPABASE OVERWRITES LOCAL
         const tables = [
             { name: 'billboards', setter: (data: any[]) => { billboards = data; saveToStorage(STORAGE_KEYS.BILLBOARDS, data); } },
             { name: 'clients', setter: (data: any[]) => { clients = data; saveToStorage(STORAGE_KEYS.CLIENTS, data); } },
@@ -160,6 +164,15 @@ export const pullAllDataFromSupabase = async (): Promise<boolean> => {
             { name: 'maintenance_logs', setter: (data: any[]) => { maintenanceLogs = data; saveToStorage(STORAGE_KEYS.MAINTENANCE, data); } },
             { name: 'outsourced_billboards', setter: (data: any[]) => { outsourcedBillboards = data; saveToStorage(STORAGE_KEYS.OUTSOURCED, data); } },
             { name: 'printing_jobs', setter: (data: any[]) => { printingJobs = data; saveToStorage(STORAGE_KEYS.PRINTING, data); } },
+            { name: 'audit_logs', setter: (data: any[]) => { 
+                // Sort by timestamp descending (newest first)
+                auditLogs = data.sort((a, b) => {
+                    const dateA = new Date(a.timestamp).getTime();
+                    const dateB = new Date(b.timestamp).getTime();
+                    return dateB - dateA;
+                });
+                saveToStorage(STORAGE_KEYS.LOGS, auditLogs); 
+            } },
         ];
 
         for (const table of tables) {
@@ -169,12 +182,11 @@ export const pullAllDataFromSupabase = async (): Promise<boolean> => {
                     console.warn(`⚠️ Error fetching ${table.name}:`, error.message);
                     continue;
                 }
-                if (data && data.length > 0) {
+                // ALWAYS use Supabase data, even if empty (that's the truth)
+                if (data) {
                     table.setter(data);
                     syncedTables++;
-                    console.log(`✅ Synced ${data.length} records from ${table.name}`);
-                } else {
-                    console.log(`ℹ️ No data in ${table.name}`);
+                    console.log(`✅ Synced ${data.length} records from ${table.name} (Supabase → Local)`);
                 }
             } catch (e: any) {
                 console.error(`❌ Exception fetching ${table.name}:`, e.message);
@@ -202,14 +214,17 @@ export const pullAllDataFromSupabase = async (): Promise<boolean> => {
                     saveToStorage(STORAGE_KEYS.LOGO, companyLogo);
                 }
                 saveToStorage(STORAGE_KEYS.PROFILE, companyProfile);
-                console.log('✅ Synced company profile');
+                console.log('✅ Synced company profile from Supabase');
             }
         } catch (e) {
-            console.log('ℹ️ No company profile found');
+            console.log('ℹ️ No company profile found in Supabase');
         }
 
+        // Mark Supabase sync as complete - app can now trust local cache
+        supabaseSyncComplete = true;
+        
         notifyListeners();
-        console.log(`✅ Data pull complete! Synced ${syncedTables} tables from Supabase`);
+        console.log(`✅ SUPABASE SYNC COMPLETE! ${syncedTables} tables loaded. Supabase is now the source of truth.`);
         return true;
     } catch (error: any) {
         console.error('❌ Failed to pull data from Supabase:', error.message);
@@ -420,7 +435,89 @@ export const runAutoBilling = () => { /* ... existing ... */ return 0; };
 export const runMaintenanceCheck = () => 0; export const getAutoBackupStatus = () => { const autoBackup = loadFromStorage(STORAGE_KEYS.AUTO_BACKUP, null); return autoBackup ? new Date(autoBackup.timestamp).toLocaleString() : 'None'; }; export const getLastManualBackupDate = () => lastBackupDate;
 export const restoreSystemBackup = async (jsonString: string) => { /* ... existing ... */ return { success: false, count: 0 }; };
 
-export const logAction = (action: string, details: string) => { const log: AuditLogEntry = { id: `log-${Date.now()}`, timestamp: new Date().toLocaleString(), action, details, user: 'Current User' }; auditLogs = [log, ...auditLogs]; saveToStorage(STORAGE_KEYS.LOGS, auditLogs); };
+// ===== AUDIT LOG CRUD =====
+
+// CREATE - Add new audit log entry with Supabase sync
+export const logAction = (action: string, details: string, user: string = 'Current User') => { 
+    const log: AuditLogEntry = { 
+        id: `log-${Date.now()}`, 
+        timestamp: new Date().toLocaleString(), 
+        action, 
+        details, 
+        user 
+    }; 
+    auditLogs = [log, ...auditLogs]; 
+    saveToStorage(STORAGE_KEYS.LOGS, auditLogs); 
+    // Sync to Supabase
+    if (supabase) syncToSupabase('audit_logs', log);
+};
+
+// READ - Async getter that fetches from Supabase first (source of truth)
+export const getAuditLogsAsync = async (): Promise<AuditLogEntry[]> => {
+    if (!supabase) return auditLogs || [];
+    const data = await fetchFromSupabase<AuditLogEntry>('audit_logs', auditLogs);
+    if (data.length > 0) { 
+        // Sort by timestamp descending (newest first)
+        auditLogs = data.sort((a, b) => {
+            const dateA = new Date(a.timestamp).getTime();
+            const dateB = new Date(b.timestamp).getTime();
+            return dateB - dateA;
+        });
+        saveToStorage(STORAGE_KEYS.LOGS, auditLogs); 
+    }
+    return auditLogs;
+};
+
+// UPDATE - Edit an existing audit log entry
+export const updateAuditLog = (updatedLog: AuditLogEntry) => {
+    const idx = auditLogs.findIndex(l => l.id === updatedLog.id);
+    if (idx !== -1) {
+        auditLogs[idx] = updatedLog;
+        saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+        if (supabase) syncToSupabase('audit_logs', updatedLog);
+        notifyListeners();
+        return true;
+    }
+    return false;
+};
+
+// DELETE - Remove a single audit log entry
+export const deleteAuditLog = (id: string) => {
+    const target = auditLogs.find(l => l.id === id);
+    if (target) {
+        auditLogs = auditLogs.filter(l => l.id !== id);
+        saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+        if (supabase) queueForDeletion('audit_logs', id);
+        notifyListeners();
+        return true;
+    }
+    return false;
+};
+
+// CLEAR ALL - Remove all audit logs (admin only)
+export const clearAuditLogs = async () => {
+    const count = auditLogs.length;
+    if (count === 0) return { success: true, count: 0 };
+    
+    // Delete all from Supabase
+    if (supabase) {
+        try {
+            await supabase.from('audit_logs').delete().neq('id', '');
+        } catch (e) {
+            console.error('Failed to clear audit logs from Supabase:', e);
+        }
+    }
+    
+    // Clear local
+    auditLogs = [];
+    saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+    notifyListeners();
+    
+    // Log this action (creates a new entry after clear)
+    logAction('System', `Cleared ${count} audit log entries`);
+    
+    return { success: true, count };
+};
 
 export const resetSystemData = () => { 
     // Preserve Supabase credentials to ensure connection is not lost
@@ -560,6 +657,76 @@ export const RELEASE_NOTES = [
     }
 ];
 
+// ============================================================================
+// SUPABASE-PRIORITY DATA GETTERS
+// These functions always fetch from Supabase first, localStorage is fallback only
+// ============================================================================
+
+// Track if initial Supabase sync has completed
+let supabaseSyncComplete = false;
+export const isSupabaseSynced = () => supabaseSyncComplete;
+export const markSupabaseSynced = () => { supabaseSyncComplete = true; };
+
+// Fetch fresh data from Supabase for a specific table
+const fetchFromSupabase = async <T>(tableName: string, fallbackData: T[]): Promise<T[]> => {
+    if (!supabase) return fallbackData;
+    try {
+        const { data, error } = await supabase.from(tableName).select('*');
+        if (error) {
+            console.warn(`⚠️ Supabase fetch error for ${tableName}:`, error.message);
+            return fallbackData;
+        }
+        return (data as T[]) || fallbackData;
+    } catch (e) {
+        console.error(`❌ Exception fetching ${tableName}:`, e);
+        return fallbackData;
+    }
+};
+
+// Async getters that prioritize Supabase
+export const getBillboardsAsync = async (): Promise<Billboard[]> => {
+    if (!supabase) return billboards || [];
+    const data = await fetchFromSupabase<Billboard>('billboards', billboards);
+    if (data.length > 0) { billboards = data; saveToStorage(STORAGE_KEYS.BILLBOARDS, data); }
+    return data;
+};
+
+export const getContractsAsync = async (): Promise<Contract[]> => {
+    if (!supabase) return contracts || [];
+    const data = await fetchFromSupabase<Contract>('contracts', contracts);
+    if (data.length > 0) { contracts = data; saveToStorage(STORAGE_KEYS.CONTRACTS, data); }
+    return data;
+};
+
+export const getClientsAsync = async (): Promise<Client[]> => {
+    if (!supabase) return clients || [];
+    const data = await fetchFromSupabase<Client>('clients', clients);
+    if (data.length > 0) { clients = data; saveToStorage(STORAGE_KEYS.CLIENTS, data); }
+    return data;
+};
+
+export const getInvoicesAsync = async (): Promise<Invoice[]> => {
+    if (!supabase) return invoices || [];
+    const data = await fetchFromSupabase<Invoice>('invoices', invoices);
+    if (data.length > 0) { invoices = data; saveToStorage(STORAGE_KEYS.INVOICES, data); }
+    return data;
+};
+
+export const getExpensesAsync = async (): Promise<Expense[]> => {
+    if (!supabase) return expenses || [];
+    const data = await fetchFromSupabase<Expense>('expenses', expenses);
+    if (data.length > 0) { expenses = data; saveToStorage(STORAGE_KEYS.EXPENSES, data); }
+    return data;
+};
+
+export const getTasksAsync = async (): Promise<Task[]> => {
+    if (!supabase) return tasks || [];
+    const data = await fetchFromSupabase<Task>('tasks', tasks);
+    if (data.length > 0) { tasks = data; saveToStorage(STORAGE_KEYS.TASKS, data); }
+    return data;
+};
+
+// Sync getters - return cached data (localStorage), use after initial Supabase sync
 export const getBillboards = () => billboards || [];
 export const getContracts = () => contracts || [];
 export const getInvoices = () => invoices || [];

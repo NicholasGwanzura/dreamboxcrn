@@ -5,15 +5,28 @@ import {
   BarChart, Bar, Cell, PieChart, Pie, ComposedChart, Line
 } from 'recharts';
 import { DollarSign, FileText, Activity, Users, TrendingUp, Bell, AlertTriangle, Calendar, CheckCircle } from 'lucide-react';
-import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe } from '../services/mockData';
+import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
 import { BillboardType } from '../types';
-import { getCurrentUser } from '../services/authService';
+import { getCurrentUser, isSupabaseConfigured } from '../services/authService';
 
 export const Dashboard: React.FC = () => {
   // State for live updates
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   const currentUser = getCurrentUser();
+
+  // PRIORITY: Ensure Supabase data is loaded on mount
+  useEffect(() => {
+      const ensureData = async () => {
+          if (isSupabaseConfigured() && !isSupabaseSynced()) {
+              console.log('🔄 Dashboard: Ensuring Supabase data is loaded...');
+              await pullAllDataFromSupabase();
+          }
+          setIsLoading(false);
+      };
+      ensureData();
+  }, []);
 
   // Real-time subscription
   useEffect(() => {

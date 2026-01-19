@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Billboard, BillboardType, Client, Contract } from '../types';
-import { getBillboards, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase } from '../services/mockData';
+import { getBillboards, getBillboardsAsync, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
 import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe } from 'lucide-react';
 import L from 'leaflet';
 
@@ -192,6 +192,7 @@ export const BillboardList: React.FC = () => {
   const [isClientView, setIsClientView] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [isPullingData, setIsPullingData] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const pickerMapRef = useRef<L.Map | null>(null);
@@ -212,7 +213,27 @@ export const BillboardList: React.FC = () => {
     notes: ''
   });
 
-  // Real-time Subscription
+  // PRIORITY: Load billboards from Supabase first on mount
+  useEffect(() => {
+      const loadBillboards = async () => {
+          setIsLoading(true);
+          try {
+              // Always try Supabase first
+              const data = await getBillboardsAsync();
+              setBillboards(data);
+              console.log(`📋 Loaded ${data.length} billboards (Supabase priority)`);
+          } catch (err) {
+              console.error('Failed to load billboards from Supabase:', err);
+              // Fallback to local cache
+              setBillboards(getBillboards());
+          } finally {
+              setIsLoading(false);
+          }
+      };
+      loadBillboards();
+  }, []);
+
+  // Real-time Subscription for updates
   useEffect(() => {
       const unsubscribe = subscribe(() => {
           setBillboards([...getBillboards()]);

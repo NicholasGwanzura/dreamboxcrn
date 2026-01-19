@@ -162,6 +162,26 @@ Before deploying to production:
 5. Configure allowed redirect URLs in Supabase settings
 6. Use environment variables for production secrets
 
+## Edge Function for Admin User Listing (recommended)
+
+To list/manage users without exposing the service role key to the browser:
+
+1. Install Supabase CLI (https://supabase.com/docs/guides/cli). Log in: `supabase login`.
+2. Set env vars for the function (service role key stays server-side only):
+
+```
+supabase functions secrets set SUPABASE_URL=your_project_url SUPABASE_SERVICE_ROLE_KEY=your_service_role_key --project-ref your-project-ref
+```
+
+3. Deploy the Edge Function included at `supabase/functions/admin-list-users/index.ts`:
+
+```
+supabase functions deploy admin-list-users --project-ref your-project-ref
+```
+
+4. In Supabase Dashboard → Authentication → Policies, ensure functions are allowed to call auth admin APIs (service role key already has this permission).
+5. From the frontend, call it via the anon key (already wired in `authService.getAllUsers`): it invokes `supabase.functions.invoke('admin-list-users')` to fetch users securely.
+
 ## Security Best Practices
 
 1. **Never commit `.env.local`** - it contains secret keys

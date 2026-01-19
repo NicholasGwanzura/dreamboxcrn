@@ -16,7 +16,8 @@ import { Maintenance } from './components/Maintenance';
 import { Auth } from './components/Auth';
 import { ClientPortal } from './components/ClientPortal';
 import { PublicView } from './components/PublicView';
-import { getCurrentUser, onAuthStateChange } from './services/authService';
+import { getCurrentUser, onAuthStateChange, isSupabaseConfigured } from './services/authService';
+import { pullAllDataFromSupabase } from './services/mockData';
 import { User } from './types';
 
 
@@ -82,6 +83,21 @@ const App: React.FC = () => {
         if (user) {
           setCurrentUser(user);
           setIsAuthenticated(true);
+          
+          // MANDATORY: Pull data from Supabase on app init if user already logged in
+          if (isSupabaseConfigured()) {
+            console.log('🔄 User session restored - syncing data from Supabase...');
+            try {
+              const syncSuccess = await pullAllDataFromSupabase();
+              if (syncSuccess) {
+                console.log('✅ Data synced from Supabase - billboards loaded');
+              } else {
+                console.warn('⚠️ Data sync incomplete');
+              }
+            } catch (syncErr) {
+              console.error('❌ Error syncing data on init:', syncErr);
+            }
+          }
         }
       } catch (err) {
         console.error('Error initializing auth:', err);

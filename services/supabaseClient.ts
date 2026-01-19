@@ -1,9 +1,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Hardcoded Supabase credentials
-const supabaseUrl = 'https://iiphiigaksyshionjhmt.supabase.co';
-const supabaseKey = 'sb_publishable_ECtk9UIokpPYAwI5eb7lGA_s7YtRSk4';
+// Use environment-based credentials; never hardcode keys.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 let client = null;
 

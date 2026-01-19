@@ -6,6 +6,67 @@ import { getUsers, addUser, findUser, fetchLatestUsers, pullAllDataFromSupabase 
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Try to fetch users through a secured Supabase Edge Function that holds the service role key.
+const fetchUsersViaEdge = async (): Promise<User[]> => {
+    const { data, error } = await supabase.functions.invoke('admin-list-users');
+    if (error) throw error;
+    if (!data || !Array.isArray(data)) {
+        throw new Error('Invalid response from admin-list-users function');
+    }
+    return data.map((u: any) => ({
+        id: u.id,
+        email: u.email || '',
+        firstName: u.user_metadata?.firstName || '',
+        lastName: u.user_metadata?.lastName || '',
+        role: u.user_metadata?.role || 'Staff',
+        status: u.user_metadata?.status || 'Active',
+        username: u.email?.split('@')[0] || ''
+    }));
+};
+
+// Create user via Edge Function (service role key stays server-side)
+export const createUserViaEdge = async (userData: {
+    email: string;
+    password?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: 'Admin' | 'Manager' | 'Staff';
+    status?: 'Active' | 'Pending' | 'Rejected';
+}): Promise<{ user: User; tempPassword: string }> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+    const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: userData,
+    });
+    if (error) throw new Error(error.message || 'Failed to create user');
+    if (data?.error) throw new Error(data.error);
+    return {
+        user: {
+            id: data.user.id,
+            email: data.user.email || '',
+            firstName: data.user.user_metadata?.firstName || '',
+            lastName: data.user.user_metadata?.lastName || '',
+            role: data.user.user_metadata?.role || 'Staff',
+            status: data.user.user_metadata?.status || 'Active',
+            username: data.user.email?.split('@')[0] || ''
+        },
+        tempPassword: data.tempPassword
+    };
+};
+
+// Delete user via Edge Function (service role key stays server-side)
+export const deleteUserViaEdge = async (userId: string): Promise<void> => {
+    if (!isSupabaseConfigured()) {
+        throw new Error('Supabase not configured');
+    }
+    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+        body: { userId },
+    });
+    if (error) throw new Error(error.message || 'Failed to delete user');
+    if (data?.error) throw new Error(data.error);
+};
+
 /**
  * Re-export isSupabaseConfigured from supabaseClient
  */
@@ -147,17 +208,19 @@ export const login = async (identifier: string, password: string): Promise<User 
                 console.warn('Failed to save user session to localStorage');
             }
 
-            // Pull all data from Supabase after successful login
-            console.log('🔄 Fetching latest data from Supabase...');
-            pullAllDataFromSupabase().then(success => {
-                if (success) {
-                    console.log('✅ All data synced from Supabase');
+            // MANDATORY: Pull all data from Supabase before returning (blocking)
+            console.log('🔄 Fetching latest data from Supabase (mandatory sync)...');
+            try {
+                const syncSuccess = await pullAllDataFromSupabase();
+                if (syncSuccess) {
+                    console.log('✅ All data synced from Supabase - billboards loaded');
                 } else {
-                    console.warn('⚠️ Some data may not have synced');
+                    console.warn('⚠️ Data sync incomplete - some data may not have loaded');
                 }
-            }).catch(err => {
-                console.error('❌ Error syncing data:', err);
-            });
+            } catch (syncErr) {
+                console.error('❌ Error syncing data:', syncErr);
+                // Don't block login, but log the error
+            }
 
             return userData;
         }
@@ -326,29 +389,49 @@ export const inviteUser = async (email: string, firstName: string, lastName: str
 /**
  * Get all users (Admin only)
  */
-export const getAllUsers = async (): Promise<User[]> => {
+export const getAllUsers = async (): Promise<{ users: User[]; source: 'mock' | 'supabase'; note?: string }> => {
     if (!isSupabaseConfigured()) {
-        // Fallback to mock data
-        return getUsers();
+        // Fallback to mock data when Supabase is not wired up
+        return { users: getUsers(), source: 'mock', note: 'Supabase not configured; showing local mock users.' };
     }
 
+    // Preferred path: call Edge Function that uses service role key on the server
+    try {
+        const edgeUsers = await fetchUsersViaEdge();
+        return { users: edgeUsers, source: 'supabase' };
+    } catch (edgeErr: any) {
+        const msg = edgeErr?.message || edgeErr?.error || '';
+        const unauthorized = msg.toLowerCase().includes('401') || msg.toLowerCase().includes('forbidden') || msg.toLowerCase().includes('unauthorized');
+        if (unauthorized) {
+            throw new Error('admin-list-users edge function denied access. Ensure the function exists and your anon key can invoke it.');
+        }
+        console.warn('Edge function admin-list-users failed, falling back to admin API:', edgeErr);
+    }
+
+    // Fallback (requires service role key; will error in browser if not proxied through backend)
     try {
         const { data: { users }, error } = await supabase.auth.admin.listUsers();
         
         if (error) throw error;
 
-        return users.map(u => ({
-            id: u.id,
-            email: u.email || '',
-            firstName: u.user_metadata?.firstName || '',
-            lastName: u.user_metadata?.lastName || '',
-            role: u.user_metadata?.role || 'Staff',
-            status: u.user_metadata?.status || 'Active',
-            username: u.email?.split('@')[0] || ''
-        }));
+        return {
+            source: 'supabase',
+            users: users.map(u => ({
+                id: u.id,
+                email: u.email || '',
+                firstName: u.user_metadata?.firstName || '',
+                lastName: u.user_metadata?.lastName || '',
+                role: u.user_metadata?.role || 'Staff',
+                status: u.user_metadata?.status || 'Active',
+                username: u.email?.split('@')[0] || ''
+            }))
+        };
     } catch (err: any) {
+        const message = err?.message?.toLowerCase().includes('unauthorized')
+            ? 'Supabase admin APIs need a service role key on a backend/Edge Function. Do not put the service key in the frontend.'
+            : err?.message || 'Failed to fetch users';
         console.error('Error fetching users:', err);
-        return [];
+        throw new Error(message);
     }
 };
 

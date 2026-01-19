@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getUsers, addUser, updateUser, deleteUser, getAuditLogs, getCompanyLogo, setCompanyLogo, resetCompanyLogo, getCompanyProfile, createCompanyProfile, updateCompanyProfile, resetCompanyProfile, RELEASE_NOTES, resetSystemData, createSystemBackup, restoreSystemBackup, getLastManualBackupDate, getAutoBackupStatus, getStorageUsage, simulateCloudSync, getLastCloudBackupDate, triggerFullSync, verifyDataIntegrity, syncToSupabase } from '../services/mockData';
+import { getUsers, addUser, updateUser, deleteUser, getAuditLogs, getAuditLogsAsync, updateAuditLog, deleteAuditLog, clearAuditLogs, getCompanyLogo, setCompanyLogo, resetCompanyLogo, getCompanyProfile, createCompanyProfile, updateCompanyProfile, resetCompanyProfile, RELEASE_NOTES, resetSystemData, createSystemBackup, restoreSystemBackup, getLastManualBackupDate, getAutoBackupStatus, getStorageUsage, simulateCloudSync, getLastCloudBackupDate, triggerFullSync, verifyDataIntegrity, syncToSupabase } from '../services/mockData';
 import { generateAppFeaturesPDF, generateUserManualPDF } from '../services/pdfGenerator';
 import { Shield, Building, ScrollText, Download, Plus, X, Save, Phone, MapPin, Edit2, Trash2, AlertTriangle, Cloud, Upload, RefreshCw, Database, Clock, HardDrive, Sparkles, Loader2, CheckCircle, FileText, ChevronRight, Server, Wifi, Activity, Lock, Copy, FileCheck, Layers, Cpu, Code2, UserCheck, Users, Mail } from 'lucide-react';
-import { User as UserType, CompanyProfile } from '../types';
+import { User as UserType, CompanyProfile, AuditLogEntry } from '../types';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../services/supabaseClient';
 
 
@@ -156,12 +156,21 @@ create table company_profile (
   country text,
   logo text
 );
+
+-- 10. Audit Logs
+create table audit_logs (
+  id text primary key,
+  timestamp text,
+  action text,
+  details text,
+  "user" text
+);
 `;
 
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'General' | 'Audit' | 'Data' | 'Database' | 'ReleaseNotes'>('General');
   const [users, setUsers] = useState<UserType[]>(getUsers());
-  const auditLogs = getAuditLogs();
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(getAuditLogs());
   const [logoPreview, setLogoPreview] = useState(getCompanyLogo());
   const [profile, setProfile] = useState<CompanyProfile>(getCompanyProfile());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +185,12 @@ export const Settings: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [integrityReport, setIntegrityReport] = useState<any>(null);
 
+  // Audit Log CRUD State
+  const [editingAuditLog, setEditingAuditLog] = useState<AuditLogEntry | null>(null);
+  const [auditLogToDelete, setAuditLogToDelete] = useState<AuditLogEntry | null>(null);
+  const [isClearingAuditLogs, setIsClearingAuditLogs] = useState(false);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+
   // Pending Approval State
   const [approvalUser, setApprovalUser] = useState<UserType | null>(null);
 
@@ -185,6 +200,19 @@ export const Settings: React.FC = () => {
       key: localStorage.getItem('sb_key') || ''
   });
   const [dbStatus, setDbStatus] = useState<'Disconnected' | 'Connecting' | 'Connected'>('Disconnected');
+
+  // Load audit logs from Supabase when tab is active
+  useEffect(() => {
+      if (activeTab === 'Audit') {
+          const loadAuditLogs = async () => {
+              setIsLoadingAuditLogs(true);
+              const logs = await getAuditLogsAsync();
+              setAuditLogs(logs);
+              setIsLoadingAuditLogs(false);
+          };
+          loadAuditLogs();
+      }
+  }, [activeTab]);
 
   useEffect(() => {
       const check = async () => {
@@ -277,6 +305,51 @@ export const Settings: React.FC = () => {
   };
 
   const handleExportAuditLogs = () => { if (auditLogs.length === 0) { alert("No logs to export."); return; } const csvRows = auditLogs.map(log => `${log.id},"${log.timestamp}","${log.user}","${log.action}","${log.details.replace(/"/g, '""')}"`).join("\n"); const blob = new Blob(["ID,Timestamp,User,Action,Details\n" + csvRows], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.setAttribute('download', `audit_logs_${new Date().toISOString().slice(0,10)}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+
+  // Audit Log CRUD Handlers
+  const handleEditAuditLog = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (editingAuditLog) {
+          const success = updateAuditLog(editingAuditLog);
+          if (success) {
+              setAuditLogs(getAuditLogs());
+              setEditingAuditLog(null);
+          } else {
+              alert('Failed to update audit log entry.');
+          }
+      }
+  };
+
+  const handleConfirmDeleteAuditLog = () => {
+      if (auditLogToDelete) {
+          const success = deleteAuditLog(auditLogToDelete.id);
+          if (success) {
+              setAuditLogs(getAuditLogs());
+              setAuditLogToDelete(null);
+          } else {
+              alert('Failed to delete audit log entry.');
+          }
+      }
+  };
+
+  const handleClearAllAuditLogs = async () => {
+      setIsClearingAuditLogs(true);
+      const result = await clearAuditLogs();
+      if (result.success) {
+          setAuditLogs(getAuditLogs());
+          alert(`Cleared ${result.count} audit log entries.`);
+      } else {
+          alert('Failed to clear audit logs.');
+      }
+      setIsClearingAuditLogs(false);
+  };
+
+  const handleRefreshAuditLogs = async () => {
+      setIsLoadingAuditLogs(true);
+      const logs = await getAuditLogsAsync();
+      setAuditLogs(logs);
+      setIsLoadingAuditLogs(false);
+  };
 
   const handleDownloadBackup = () => {
     const json = createSystemBackup();
@@ -623,38 +696,130 @@ export const Settings: React.FC = () => {
             </div>
         )}
         {activeTab === 'Audit' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ScrollText size={20}/> Audit Log</h3>
-                        <p className="text-xs text-slate-500">Track system activities and changes</p>
+            <div className="space-y-6 animate-fade-in">
+                {/* Audit Log Header */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50/50">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ScrollText size={20}/> Audit Log</h3>
+                            <p className="text-xs text-slate-500">Track system activities and changes • {auditLogs.length} entries</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={handleRefreshAuditLogs} disabled={isLoadingAuditLogs} className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors uppercase tracking-wider disabled:opacity-50">
+                                {isLoadingAuditLogs ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14}/>} Sync
+                            </button>
+                            <button onClick={handleExportAuditLogs} className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors uppercase tracking-wider">
+                                <Download size={14}/> Export CSV
+                            </button>
+                            <button onClick={handleClearAllAuditLogs} disabled={isClearingAuditLogs || auditLogs.length === 0} className="flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors uppercase tracking-wider disabled:opacity-50">
+                                {isClearingAuditLogs ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>} Clear All
+                            </button>
+                        </div>
                     </div>
-                    <button onClick={handleExportAuditLogs} className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors uppercase tracking-wider">
-                        <Download size={14}/> Export CSV
-                    </button>
-                </div>
-                <div className="max-h-[600px] overflow-y-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-100">
-                            <tr>
-                                <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-40">Timestamp</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-40">User</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-40">Action</th>
-                                <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {auditLogs.map(log => (
-                                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.timestamp}</td>
-                                    <td className="px-6 py-4 font-bold text-slate-700">{log.user}</td>
-                                    <td className="px-6 py-4"><span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase tracking-wider text-slate-600 border border-slate-200">{log.action}</span></td>
-                                    <td className="px-6 py-4 text-slate-600">{log.details}</td>
+                    <div className="max-h-[600px] overflow-y-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-100">
+                                <tr>
+                                    <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-40">Timestamp</th>
+                                    <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-32">User</th>
+                                    <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-32">Action</th>
+                                    <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider">Details</th>
+                                    <th className="px-6 py-4 font-bold text-xs uppercase text-slate-400 tracking-wider w-24 text-center">Actions</th>
                                 </tr>
-                            ))}
-                            {auditLogs.length === 0 && <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No activity recorded yet.</td></tr>}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {isLoadingAuditLogs ? (
+                                    <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400"><Loader2 size={24} className="animate-spin mx-auto mb-2"/> Loading audit logs from Supabase...</td></tr>
+                                ) : auditLogs.map(log => (
+                                    <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
+                                        <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.timestamp}</td>
+                                        <td className="px-6 py-4 font-bold text-slate-700">{log.user}</td>
+                                        <td className="px-6 py-4"><span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase tracking-wider text-slate-600 border border-slate-200">{log.action}</span></td>
+                                        <td className="px-6 py-4 text-slate-600">{log.details}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => setEditingAuditLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit">
+                                                    <Edit2 size={14}/>
+                                                </button>
+                                                <button onClick={() => setAuditLogToDelete(log)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                                    <Trash2 size={14}/>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {!isLoadingAuditLogs && auditLogs.length === 0 && <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">No activity recorded yet.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* CRUD Legend Card */}
+                <div className="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-2xl border border-indigo-100">
+                    <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2"><Shield size={16}/> Audit Log CRUD Status</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="flex items-center gap-2 text-xs"><CheckCircle size={14} className="text-green-500"/> <span className="text-slate-600"><strong>Create</strong> – Auto on actions</span></div>
+                        <div className="flex items-center gap-2 text-xs"><CheckCircle size={14} className="text-green-500"/> <span className="text-slate-600"><strong>Read</strong> – Fetch from Supabase</span></div>
+                        <div className="flex items-center gap-2 text-xs"><CheckCircle size={14} className="text-green-500"/> <span className="text-slate-600"><strong>Update</strong> – Edit entries</span></div>
+                        <div className="flex items-center gap-2 text-xs"><CheckCircle size={14} className="text-green-500"/> <span className="text-slate-600"><strong>Delete</strong> – Remove entries</span></div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Edit Audit Log Modal */}
+        {editingAuditLog && (
+            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Edit2 size={18}/> Edit Audit Log Entry</h3>
+                        <button onClick={() => setEditingAuditLog(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={20}/></button>
+                    </div>
+                    <form onSubmit={handleEditAuditLog} className="p-6 space-y-5">
+                        <div className="grid grid-cols-2 gap-4">
+                            <MinimalInput label="Timestamp" value={editingAuditLog.timestamp} onChange={(e: any) => setEditingAuditLog({...editingAuditLog, timestamp: e.target.value})} required />
+                            <MinimalInput label="User" value={editingAuditLog.user} onChange={(e: any) => setEditingAuditLog({...editingAuditLog, user: e.target.value})} required />
+                        </div>
+                        <MinimalInput label="Action" value={editingAuditLog.action} onChange={(e: any) => setEditingAuditLog({...editingAuditLog, action: e.target.value})} required />
+                        <div>
+                            <label className="block text-xs text-slate-400 font-medium uppercase tracking-wide mb-2">Details</label>
+                            <textarea 
+                                value={editingAuditLog.details} 
+                                onChange={(e) => setEditingAuditLog({...editingAuditLog, details: e.target.value})} 
+                                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-slate-800 focus:border-slate-400 focus:ring-0 outline-none resize-none" 
+                                rows={3}
+                                required
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-4">
+                            <button type="button" onClick={() => setEditingAuditLog(null)} className="flex-1 py-3 text-slate-600 border border-slate-200 rounded-xl text-sm font-bold uppercase tracking-wider hover:bg-slate-50">Cancel</button>
+                            <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold uppercase tracking-wider hover:bg-indigo-700 flex items-center justify-center gap-2"><Save size={16}/> Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+
+        {/* Delete Audit Log Confirmation Modal */}
+        {auditLogToDelete && (
+            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-red-50">
+                        <h3 className="text-lg font-bold text-red-800 flex items-center gap-2"><AlertTriangle size={18}/> Delete Audit Entry</h3>
+                        <button onClick={() => setAuditLogToDelete(null)} className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-100"><X size={20}/></button>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-sm text-slate-600 mb-4">Are you sure you want to delete this audit log entry?</p>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+                            <p className="text-xs text-slate-500 mb-1"><strong>Action:</strong> {auditLogToDelete.action}</p>
+                            <p className="text-xs text-slate-500 mb-1"><strong>Details:</strong> {auditLogToDelete.details}</p>
+                            <p className="text-xs text-slate-400"><strong>Timestamp:</strong> {auditLogToDelete.timestamp}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setAuditLogToDelete(null)} className="flex-1 py-3 text-slate-600 border border-slate-200 rounded-xl text-sm font-bold uppercase tracking-wider hover:bg-slate-50">Cancel</button>
+                            <button onClick={handleConfirmDeleteAuditLog} className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold uppercase tracking-wider hover:bg-red-700 flex items-center justify-center gap-2"><Trash2 size={16}/> Delete</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
