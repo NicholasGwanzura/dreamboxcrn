@@ -415,7 +415,7 @@ ensureDev('chiduurobc@gmail.com', 'owner-brian-001', 'Brian', 'brian', 'chiduuro
 
 saveToStorage(STORAGE_KEYS.USERS, users);
 
-let companyLogo = loadFromStorage(STORAGE_KEYS.LOGO, null) || 'https://via.placeholder.com/200x200?text=Dreambox';
+let companyLogo = loadFromStorage(STORAGE_KEYS.LOGO, null) || 'https://placehold.co/200x200/0f172a/white?text=Dreambox';
 const DEFAULT_PROFILE: CompanyProfile = { name: "Dreambox Advertising", vatNumber: "VAT-DBX-001", regNumber: "REG-2026/DBX", email: "info@dreambox.co.zw", supportEmail: "support@dreambox.co.zw", phone: "+263 777 999 888", website: "www.dreambox.co.zw", address: "123 Creative Park, Borrowdale", city: "Harare", country: "Zimbabwe" };
 let companyProfile: CompanyProfile = loadFromStorage(STORAGE_KEYS.PROFILE, null) || DEFAULT_PROFILE;
 let lastBackupDate = loadFromStorage(STORAGE_KEYS.LAST_BACKUP, null) || 'Never'; let lastCloudBackup = loadFromStorage(STORAGE_KEYS.CLOUD_BACKUP, null) || 'Never';
@@ -423,7 +423,7 @@ let lastBackupDate = loadFromStorage(STORAGE_KEYS.LAST_BACKUP, null) || 'Never';
 // ... (Other getters/setters/helpers remain same)
 export const getCompanyLogo = () => companyLogo;
 export const setCompanyLogo = (url: string) => { companyLogo = url; saveToStorage(STORAGE_KEYS.LOGO, companyLogo); if(supabase) syncToSupabase('company_profile', { ...companyProfile, id: 'profile_v1', logo: url }); logAction('Settings Update', 'Updated company logo'); notifyListeners(); };
-export const resetCompanyLogo = () => { companyLogo = 'https://via.placeholder.com/200x200?text=Dreambox'; saveToStorage(STORAGE_KEYS.LOGO, companyLogo); if(supabase) syncToSupabase('company_profile', { ...companyProfile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Update', 'Reset company logo to default'); notifyListeners(); };
+export const resetCompanyLogo = () => { companyLogo = 'https://placehold.co/200x200/0f172a/white?text=Dreambox'; saveToStorage(STORAGE_KEYS.LOGO, companyLogo); if(supabase) syncToSupabase('company_profile', { ...companyProfile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Update', 'Reset company logo to default'); notifyListeners(); };
 export const getCompanyProfile = () => companyProfile;
 export const createCompanyProfile = (profile: CompanyProfile) => { companyProfile = profile; saveToStorage(STORAGE_KEYS.PROFILE, companyProfile); if(supabase) syncToSupabase('company_profile', { ...profile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Create', 'Created company profile'); notifyListeners(); };
 export const updateCompanyProfile = (profile: CompanyProfile) => { companyProfile = profile; saveToStorage(STORAGE_KEYS.PROFILE, companyProfile); if(supabase) syncToSupabase('company_profile', { ...profile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Update', 'Updated company profile details'); notifyListeners(); };

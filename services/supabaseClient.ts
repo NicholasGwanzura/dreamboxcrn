@@ -10,8 +10,15 @@ let client = null;
 if (!supabaseUrl || !supabaseKey) {
     console.warn("Supabase credentials not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local");
 } else {
+    // Validate anon key format - Supabase JWT tokens start with 'eyJ'
+    if (!supabaseKey.startsWith('eyJ')) {
+        console.error("⚠️ INVALID ANON KEY FORMAT! Supabase anon keys should start with 'eyJ...' (they are JWT tokens).");
+        console.error("Your key starts with:", supabaseKey.substring(0, 20) + "...");
+        console.error("Please get the correct anon key from: https://supabase.com/dashboard/project/" + supabaseUrl.split('//')[1].split('.')[0] + "/settings/api");
+    }
     try {
         client = createClient(supabaseUrl, supabaseKey);
+        console.log("✅ Supabase client initialized with URL:", supabaseUrl);
     } catch (e) {
         console.error("Supabase initialization failed:", e);
     }

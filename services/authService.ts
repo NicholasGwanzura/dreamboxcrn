@@ -8,11 +8,22 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Try to fetch users through a secured Supabase Edge Function that holds the service role key.
 const fetchUsersViaEdge = async (): Promise<User[]> => {
+    console.log("📡 Calling admin-list-users Edge Function...");
     const { data, error } = await supabase.functions.invoke('admin-list-users');
-    if (error) throw error;
+    
+    if (error) {
+        console.error("❌ Edge Function error:", error);
+        throw error;
+    }
+    
+    console.log("📥 Edge Function response:", data);
+    
     if (!data || !Array.isArray(data)) {
+        console.error("❌ Invalid response format - expected array, got:", typeof data, data);
         throw new Error('Invalid response from admin-list-users function');
     }
+    
+    console.log(`✅ Found ${data.length} users from Supabase Auth`);
     return data.map((u: any) => ({
         id: u.id,
         email: u.email || '',
