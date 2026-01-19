@@ -662,8 +662,7 @@ export const RELEASE_NOTES = [
 // These functions always fetch from Supabase first, localStorage is fallback only
 // ============================================================================
 
-// Track if initial Supabase sync has completed
-let supabaseSyncComplete = false;
+// Use the supabaseSyncComplete flag declared at the top of the file
 export const isSupabaseSynced = () => supabaseSyncComplete;
 export const markSupabaseSynced = () => { supabaseSyncComplete = true; };
 
