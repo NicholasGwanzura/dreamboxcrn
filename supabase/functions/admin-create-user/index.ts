@@ -47,8 +47,54 @@ serve(async (req) => {
       });
     }
 
-    // Generate temporary password if not provided
-    const userPassword = password || Math.random().toString(36).slice(-12) + "A1!";
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate password strength if provided
+    if (password) {
+      if (password.length < 8) {
+        return new Response(JSON.stringify({ error: "Password must be at least 8 characters" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return new Response(JSON.stringify({ error: "Password must contain uppercase, lowercase, and a number" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Generate secure temporary password if not provided (16 chars with all character types)
+    const generateSecurePassword = (): string => {
+      const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const lower = 'abcdefghijklmnopqrstuvwxyz';
+      const numbers = '0123456789';
+      const special = '!@#$%^&*';
+      const all = upper + lower + numbers + special;
+      
+      let pwd = [
+        upper[Math.floor(Math.random() * upper.length)],
+        lower[Math.floor(Math.random() * lower.length)],
+        numbers[Math.floor(Math.random() * numbers.length)],
+        special[Math.floor(Math.random() * special.length)]
+      ];
+      
+      for (let i = 0; i < 12; i++) {
+        pwd.push(all[Math.floor(Math.random() * all.length)]);
+      }
+      
+      return pwd.sort(() => Math.random() - 0.5).join('');
+    };
+
+    const userPassword = password || generateSecurePassword();
 
     const { data, error } = await supabase.auth.admin.createUser({
       email,

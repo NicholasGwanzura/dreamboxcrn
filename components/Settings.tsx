@@ -180,6 +180,7 @@ export const Settings: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [newUser, setNewUser] = useState<Partial<UserType>>({ firstName: '', lastName: '', email: '', username: '', role: 'Staff', status: 'Active' });
+  const [userFormError, setUserFormError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState({ manual: getLastManualBackupDate(), auto: getAutoBackupStatus(), storage: getStorageUsage(), cloud: getLastCloudBackupDate() });
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -255,22 +256,96 @@ export const Settings: React.FC = () => {
       alert("Company details updated successfully.");
   };
 
+  // Email validation helper
+  const isValidEmail = (email: string): boolean => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(email);
+  };
+
+  // Generate secure random password (16 chars with upper, lower, number, special)
+  const generateSecurePassword = (): string => {
+      const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const lower = 'abcdefghijklmnopqrstuvwxyz';
+      const numbers = '0123456789';
+      const special = '!@#$%^&*';
+      const all = upper + lower + numbers + special;
+      
+      // Ensure at least one of each type
+      let password = [
+          upper[Math.floor(Math.random() * upper.length)],
+          lower[Math.floor(Math.random() * lower.length)],
+          numbers[Math.floor(Math.random() * numbers.length)],
+          special[Math.floor(Math.random() * special.length)]
+      ];
+      
+      // Fill remaining 12 characters
+      for (let i = 0; i < 12; i++) {
+          password.push(all[Math.floor(Math.random() * all.length)]);
+      }
+      
+      // Shuffle
+      return password.sort(() => Math.random() - 0.5).join('');
+  };
+
+  // Generate UUID
+  const generateUUID = (): string => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          const v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+      });
+  };
+
   const handleAddUser = (e: React.FormEvent) => { 
-      e.preventDefault(); 
+      e.preventDefault();
+      setUserFormError(null);
+      
+      // Validate required fields
+      if (!newUser.firstName?.trim()) {
+          setUserFormError('First name is required');
+          return;
+      }
+      if (!newUser.lastName?.trim()) {
+          setUserFormError('Last name is required');
+          return;
+      }
+      if (!newUser.email?.trim()) {
+          setUserFormError('Email is required');
+          return;
+      }
+      
+      // Validate email format
+      if (!isValidEmail(newUser.email)) {
+          setUserFormError('Please enter a valid email address');
+          return;
+      }
+      
+      // Check for duplicate email
+      const existingUser = users.find(u => u.email.toLowerCase() === newUser.email!.toLowerCase());
+      if (existingUser) {
+          setUserFormError('A user with this email already exists');
+          return;
+      }
+      
+      const securePassword = generateSecurePassword();
       const user: UserType = { 
-          id: (users.length + 1).toString(), 
-          firstName: newUser.firstName!, 
-          lastName: newUser.lastName!, 
-          email: newUser.email!, 
-          username: newUser.username || newUser.email!.split('@')[0],
+          id: generateUUID(), 
+          firstName: newUser.firstName!.trim(), 
+          lastName: newUser.lastName!.trim(), 
+          email: newUser.email!.trim().toLowerCase(), 
+          username: newUser.username?.trim() || newUser.email!.split('@')[0],
           role: newUser.role as 'Admin' | 'Manager' | 'Staff', 
-          password: 'password123',
+          password: securePassword,
           status: 'Active'
       }; 
       addUser(user); 
       setUsers(getUsers()); 
       setIsAddUserModalOpen(false); 
-      setNewUser({ firstName: '', lastName: '', email: '', username: '', role: 'Staff', status: 'Active' }); 
+      setNewUser({ firstName: '', lastName: '', email: '', username: '', role: 'Staff', status: 'Active' });
+      setUserFormError(null);
+      
+      // Show the generated password to admin
+      alert(`User created successfully!\n\nTemporary Password: ${securePassword}\n\nPlease share this securely with the user.`);
   };
   
   const handleEditUser = (e: React.FormEvent) => { e.preventDefault(); if (editingUser) { updateUser(editingUser); setUsers(getUsers()); setEditingUser(null); } };
@@ -872,14 +947,20 @@ export const Settings: React.FC = () => {
 
         {isAddUserModalOpen && (
             <div className="fixed inset-0 z-[200] overflow-y-auto">
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => setIsAddUserModalOpen(false)} />
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => { setIsAddUserModalOpen(false); setUserFormError(null); }} />
                 <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                     <div className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-white/20">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                             <h3 className="text-xl font-bold text-slate-900">Add New User</h3>
-                            <button onClick={() => setIsAddUserModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400" /></button>
+                            <button onClick={() => { setIsAddUserModalOpen(false); setUserFormError(null); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400" /></button>
                         </div>
                         <form onSubmit={handleAddUser} className="p-8 space-y-6">
+                            {userFormError && (
+                                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                                    <AlertTriangle size={16} className="shrink-0" />
+                                    {userFormError}
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-6">
                                 <MinimalInput label="First Name" value={newUser.firstName} onChange={(e: any) => setNewUser({...newUser, firstName: e.target.value})} required />
                                 <MinimalInput label="Last Name" value={newUser.lastName} onChange={(e: any) => setNewUser({...newUser, lastName: e.target.value})} required />
@@ -887,6 +968,7 @@ export const Settings: React.FC = () => {
                             <MinimalInput label="Email Address" type="email" value={newUser.email} onChange={(e: any) => setNewUser({...newUser, email: e.target.value})} required />
                             <MinimalInput label="Username (Optional)" value={newUser.username} onChange={(e: any) => setNewUser({...newUser, username: e.target.value})} placeholder="Leave blank to use email prefix" />
                             <MinimalSelect label="Role" value={newUser.role} onChange={(e: any) => setNewUser({...newUser, role: e.target.value})} options={[{value: 'Admin', label: 'Administrator'},{value: 'Manager', label: 'Manager'},{value: 'Staff', label: 'Staff Member'}]} />
+                            <p className="text-xs text-slate-400 italic">A secure password will be auto-generated and displayed after creation.</p>
                             <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all mt-4"><Save size={18} /> Create User Account</button>
                         </form>
                     </div>

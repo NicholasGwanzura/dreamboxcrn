@@ -44,12 +44,50 @@ export const UserManagement: React.FC = () => {
     };
 
     const handleAddUser = async () => {
-        if (!newUser.email) {
+        // Clear previous errors
+        setError(null);
+        
+        // Validate email is provided
+        if (!newUser.email?.trim()) {
             setError('Email is required');
             return;
         }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newUser.email)) {
+            setError('Please enter a valid email address');
+            return;
+        }
+        
+        // Check for duplicate email in current users list
+        const duplicateUser = users.find(u => u.email?.toLowerCase() === newUser.email.toLowerCase());
+        if (duplicateUser) {
+            setError('A user with this email already exists');
+            return;
+        }
+        
+        // Validate password strength if provided
+        if (newUser.password) {
+            if (newUser.password.length < 8) {
+                setError('Password must be at least 8 characters long');
+                return;
+            }
+            if (!/[A-Z]/.test(newUser.password)) {
+                setError('Password must contain at least one uppercase letter');
+                return;
+            }
+            if (!/[a-z]/.test(newUser.password)) {
+                setError('Password must contain at least one lowercase letter');
+                return;
+            }
+            if (!/[0-9]/.test(newUser.password)) {
+                setError('Password must contain at least one number');
+                return;
+            }
+        }
+        
         setActionLoading(true);
-        setError(null);
         try {
             const result = await createUserViaEdge({
                 email: newUser.email,
