@@ -197,8 +197,8 @@ Dreambox Deluxe Team
 // ============================================================================
 
 /**
- * Helper function to send emails
- * Integrate with your backend email service (Supabase, SendGrid, etc.)
+ * Helper function to send emails using mailto: links (browser fallback)
+ * For production, use Supabase Edge Functions with a real email service
  */
 export const sendEmail = async (
   to: string,
@@ -211,25 +211,70 @@ export const sendEmail = async (
   }
 ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
   try {
-    // Substitute variables in subject and HTML
+    // Substitute variables in subject and text
     const subject = substituteVariables(template.subject, data);
-    const html = substituteVariables(template.html, data);
     const text = substituteVariables(template.text, data);
 
-    // TODO: Integrate with your email service
-    // Example: SendGrid, AWS SES, Supabase, etc.
-    
-    console.log('Email prepared:', { to, subject, html, text });
+    // Open user's email client with pre-filled email
+    const mailtoParams = new URLSearchParams();
+    mailtoParams.set('subject', subject);
+    mailtoParams.set('body', text);
+    if (options?.cc?.length) mailtoParams.set('cc', options.cc.join(','));
+    if (options?.bcc?.length) mailtoParams.set('bcc', options.bcc.join(','));
 
-    // Placeholder implementation
+    const mailtoLink = `mailto:${encodeURIComponent(to)}?${mailtoParams.toString()}`;
+    
+    // Create and click a temporary link
+    const link = document.createElement('a');
+    link.href = mailtoLink;
+    link.click();
+
+    console.log('📧 Email client opened for:', { to, subject });
+
     return {
       success: true,
-      messageId: `msg_${Date.now()}`,
+      messageId: `mailto_${Date.now()}`,
     };
   } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};
+
+/**
+ * Send email via Supabase Edge Function (requires edge function setup)
+ * Use this for automated emails that don't require user interaction
+ */
+export const sendEmailViaEdge = async (
+  to: string,
+  template: EmailTemplate,
+  data: EmailTemplateData
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { supabase } = await import('./supabaseClient');
+    
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const subject = substituteVariables(template.subject, data);
+    const html = substituteVariables(template.html, data);
+    const text = substituteVariables(template.text, data);
+
+    const { error } = await supabase.functions.invoke('send-email', {
+      body: { to, subject, html, text }
+    });
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send email via Edge Function:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Email delivery failed',
     };
   }
 };

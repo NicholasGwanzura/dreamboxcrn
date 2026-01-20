@@ -486,6 +486,7 @@ export const deleteUserAccount = async (userId: string): Promise<void> => {
 
 /**
  * Resend email confirmation to user
+ * Uses Supabase's built-in email service
  */
 export const resendConfirmationEmail = async (email: string): Promise<void> => {
     if (!isSupabaseConfigured()) {
@@ -493,14 +494,14 @@ export const resendConfirmationEmail = async (email: string): Promise<void> => {
     }
 
     try {
-        const { error } = await supabase.auth.resendEnvelope({
+        const { error } = await supabase.auth.resend({
             type: 'signup',
             email
         });
 
         if (error) throw error;
     } catch (err: any) {
-        throw new Error(err.message || 'Failed to resend email');
+        throw new Error(err.message || 'Failed to resend confirmation email');
     }
 };
 

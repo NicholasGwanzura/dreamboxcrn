@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Billboard, BillboardType, Client, Contract } from '../types';
 import { getBillboards, getBillboardsAsync, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
-import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe } from 'lucide-react';
+import { uploadImageToSupabase, ImageUploadProgress, validateImageFile } from '../services/supabaseClient';
+import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import L from 'leaflet';
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false }: any) => (
@@ -87,24 +88,34 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
     const hasImage = hasValidImage(billboard.imageUrl);
 
     return (
-        <div className="group relative bg-white rounded-[2rem] shadow-sm hover:shadow-2xl hover:shadow-slate-200/50 border border-slate-100 transition-all duration-500 flex flex-col h-full overflow-hidden hover:-translate-y-2">
+        <div className="group relative bg-white rounded-2xl shadow-sm hover:shadow-2xl hover:shadow-slate-200/50 border border-slate-100 transition-all duration-500 flex flex-col h-full overflow-hidden hover:-translate-y-1">
             {/* Image Header */}
-            <div className={`h-72 relative overflow-hidden cursor-zoom-in ${!hasImage ? gradientClass : 'bg-slate-100'}`} onClick={() => hasImage && onViewImage(billboard.imageUrl!)}>
+            <div className={`h-48 sm:h-52 lg:h-56 relative overflow-hidden ${hasImage ? 'cursor-zoom-in bg-slate-100' : gradientClass}`} onClick={() => hasImage && onViewImage(billboard.imageUrl!)}>
                 {hasImage ? (
                     <img 
                         src={billboard.imageUrl} 
                         alt={billboard.name} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         onError={(e) => {
                             // Fallback if image fails to load even if URL looked valid
-                            (e.target as HTMLImageElement).style.display = 'none';
-                            (e.target as HTMLImageElement).parentElement?.classList.add(...gradientClass.split(' '));
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                                parent.classList.remove('bg-slate-100', 'cursor-zoom-in');
+                                gradientClass.split(' ').forEach(cls => parent.classList.add(cls));
+                                // Add placeholder icon
+                                const placeholder = document.createElement('div');
+                                placeholder.className = 'w-full h-full flex flex-col items-center justify-center';
+                                placeholder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-white/30"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg><span class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mt-3">No Image</span>';
+                                parent.appendChild(placeholder);
+                            }
                         }}
                     />
                 ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-white/40 p-6 text-center">
-                        <ImageIcon size={48} strokeWidth={1} className="mb-3 opacity-50"/>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/50">No Visual</span>
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white/30">
+                        <ImageIcon size={56} strokeWidth={1} />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mt-3">No Image</span>
                     </div>
                 )}
                 
@@ -112,18 +123,18 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-500"></div>
 
                 {/* Top Badges */}
-                <div className="absolute top-5 left-5 right-5 flex justify-between items-start pointer-events-none z-10">
-                    <div className="flex gap-2">
-                        <span className="flex items-center justify-center w-8 h-8 bg-white/10 backdrop-blur-md text-white font-bold text-xs rounded-full border border-white/20 shadow-lg">
+                <div className="absolute top-3 left-3 right-3 flex justify-between items-start pointer-events-none z-10">
+                    <div className="flex gap-1.5">
+                        <span className="flex items-center justify-center w-7 h-7 bg-white/10 backdrop-blur-md text-white font-bold text-[10px] rounded-full border border-white/20 shadow-lg">
                             {index}
                         </span>
                         {billboard.type === 'LED' && (
-                             <span className="flex items-center justify-center w-8 h-8 bg-indigo-500/80 backdrop-blur-md text-white rounded-full border border-white/20 shadow-lg" title="Digital LED">
-                                <Zap size={14} fill="currentColor"/>
+                             <span className="flex items-center justify-center w-7 h-7 bg-indigo-500/80 backdrop-blur-md text-white rounded-full border border-white/20 shadow-lg" title="Digital LED">
+                                <Zap size={12} fill="currentColor"/>
                              </span>
                         )}
                     </div>
-                    <span className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-full backdrop-blur-xl shadow-lg border flex items-center gap-2 transition-colors ${isAvailable ? 'bg-emerald-500/90 text-white border-emerald-400/50' : isPartial ? 'bg-amber-500/90 text-white border-amber-400/50' : 'bg-rose-500/90 text-white border-rose-400/50'}`}>
+                    <span className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full backdrop-blur-xl shadow-lg border flex items-center gap-1.5 transition-colors ${isAvailable ? 'bg-emerald-500/90 text-white border-emerald-400/50' : isPartial ? 'bg-amber-500/90 text-white border-amber-400/50' : 'bg-rose-500/90 text-white border-rose-400/50'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isAvailable ? 'bg-white animate-pulse' : 'bg-white'}`}></span>
                         {isAvailable ? 'Open' : isPartial ? '1 Side Open' : 'Booked'}
                     </span>
@@ -131,51 +142,51 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
             </div>
 
             {/* Content Body */}
-            <div className="p-6 sm:p-7 flex-1 flex flex-col relative bg-white">
+            <div className="p-4 sm:p-5 flex-1 flex flex-col relative bg-white">
                 
-                <div className="mb-6">
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                        <h3 className="font-extrabold text-2xl text-slate-900 leading-tight tracking-tight group-hover:text-indigo-600 transition-colors line-clamp-2" title={billboard.name}>
+                <div className="mb-4">
+                    <div className="flex justify-between items-start gap-2 mb-1">
+                        <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-tight tracking-tight group-hover:text-indigo-600 transition-colors line-clamp-2" title={billboard.name}>
                             {billboard.name}
                         </h3>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <MapPin size={14} className="text-indigo-500 shrink-0"/> 
-                        <span className="truncate">{billboard.location}, {billboard.town}</span>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                        <MapPin size={12} className="text-indigo-500 shrink-0"/> 
+                        <span className="truncate text-[11px]">{billboard.location}, {billboard.town}</span>
                     </div>
                 </div>
 
-                {/* Premium Stats Grid */}
-                <div className="grid grid-cols-3 gap-4 py-5 border-t border-slate-50 mb-6">
-                    <div className="flex flex-col items-center justify-center text-center gap-1 group/stat hover:bg-slate-50 rounded-xl p-1 transition-colors">
-                        <span className="text-slate-400"><Car size={18}/></span>
-                        <span className="text-xs font-bold text-slate-700">{billboard.dailyTraffic ? (billboard.dailyTraffic / 1000).toFixed(0) + 'k' : '-'}</span>
-                        <span className="text-[9px] uppercase font-bold text-slate-300 tracking-wider">Views</span>
+                {/* Compact Stats Grid */}
+                <div className="grid grid-cols-3 gap-2 py-3 border-t border-slate-100 mb-4">
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 hover:bg-slate-50 rounded-lg p-1.5 transition-colors">
+                        <span className="text-slate-400"><Car size={14}/></span>
+                        <span className="text-[11px] font-bold text-slate-700">{billboard.dailyTraffic ? (billboard.dailyTraffic / 1000).toFixed(0) + 'k' : '-'}</span>
+                        <span className="text-[8px] uppercase font-bold text-slate-300 tracking-wider">Views</span>
                     </div>
-                    <div className="flex flex-col items-center justify-center text-center gap-1 group/stat hover:bg-slate-50 rounded-xl p-1 transition-colors border-l border-r border-slate-50">
-                        <span className="text-slate-400"><Maximize2 size={18}/></span>
-                        <span className="text-xs font-bold text-slate-700">{billboard.width}x{billboard.height}</span>
-                        <span className="text-[9px] uppercase font-bold text-slate-300 tracking-wider">Meters</span>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 hover:bg-slate-50 rounded-lg p-1.5 transition-colors border-l border-r border-slate-100">
+                        <span className="text-slate-400"><Maximize2 size={14}/></span>
+                        <span className="text-[11px] font-bold text-slate-700">{billboard.width}x{billboard.height}</span>
+                        <span className="text-[8px] uppercase font-bold text-slate-300 tracking-wider">Meters</span>
                     </div>
-                    <div className="flex flex-col items-center justify-center text-center gap-1 group/stat hover:bg-slate-50 rounded-xl p-1 transition-colors">
-                        <span className="text-slate-400"><Layers size={18}/></span>
-                        <span className="text-xs font-bold text-slate-700">{billboard.type === 'Static' ? '2 Sides' : `${billboard.totalSlots} Slots`}</span>
-                        <span className="text-[9px] uppercase font-bold text-slate-300 tracking-wider">Format</span>
+                    <div className="flex flex-col items-center justify-center text-center gap-0.5 hover:bg-slate-50 rounded-lg p-1.5 transition-colors">
+                        <span className="text-slate-400"><Layers size={14}/></span>
+                        <span className="text-[11px] font-bold text-slate-700">{billboard.type === 'Static' ? '2 Sides' : `${billboard.totalSlots} Slots`}</span>
+                        <span className="text-[8px] uppercase font-bold text-slate-300 tracking-wider">Format</span>
                     </div>
                 </div>
 
                 {/* Action Bar */}
-                <div className="mt-auto flex items-center justify-between pt-4 gap-3">
-                    <span className="text-[10px] font-mono text-slate-300 bg-slate-50 px-2 py-1 rounded-md">ID: {billboard.id.slice(-4)}</span>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                        <button onClick={(e) => { e.stopPropagation(); onEdit(billboard); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Edit">
-                            <Edit2 size={18} strokeWidth={2}/>
+                <div className="mt-auto flex items-center justify-between pt-3 gap-2 border-t border-slate-50">
+                    <span className="text-[9px] font-mono text-slate-300 bg-slate-50 px-2 py-1 rounded">ID: {billboard.id.slice(-4)}</span>
+                    <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300">
+                        <button onClick={(e) => { e.stopPropagation(); onEdit(billboard); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit">
+                            <Edit2 size={16} strokeWidth={2}/>
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); onShare(billboard); }} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Share Public Link">
-                            <Share2 size={18} strokeWidth={2}/>
+                        <button onClick={(e) => { e.stopPropagation(); onShare(billboard); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Share Public Link">
+                            <Share2 size={16} strokeWidth={2}/>
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(billboard); }} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Delete">
-                            <Trash2 size={18} strokeWidth={2}/>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(billboard); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Delete">
+                            <Trash2 size={16} strokeWidth={2}/>
                         </button>
                     </div>
                 </div>
@@ -212,6 +223,10 @@ export const BillboardList: React.FC = () => {
     coordinates: { lat: -17.8292, lng: 31.0522 },
     notes: ''
   });
+
+  // Image upload state
+  const [uploadProgress, setUploadProgress] = useState<ImageUploadProgress>({ status: 'idle', progress: 0, message: '' });
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // PRIORITY: Load billboards from Supabase first on mount
   useEffect(() => {
@@ -341,7 +356,13 @@ export const BillboardList: React.FC = () => {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingBillboard) { updateBillboard(editingBillboard); setEditingBillboard(null); setPickingLocation(false); }
+    if (editingBillboard) { 
+        updateBillboard(editingBillboard); 
+        setEditingBillboard(null); 
+        setPickingLocation(false); 
+        setUploadProgress({ status: 'idle', progress: 0, message: '' });
+        setUploadError(null);
+    }
   };
   const handleConfirmDelete = () => {
       if (billboardToDelete) { deleteBillboard(billboardToDelete.id); setBillboardToDelete(null); }
@@ -358,17 +379,57 @@ export const BillboardList: React.FC = () => {
     };
     addBillboard(billboard); setIsAddModalOpen(false); setPickingLocation(false);
     setNewBillboard({ name: '', location: '', town: 'Harare', type: BillboardType.Static, width: 0, height: 0, sideARate: 0, sideBRate: 0, ratePerSlot: 0, totalSlots: 10, rentedSlots: 0, imageUrl: '', visibility: '', dailyTraffic: 0, coordinates: { lat: -17.8292, lng: 31.0522 }, sideAStatus: 'Available', sideBStatus: 'Available', notes: '' });
+    setUploadProgress({ status: 'idle', progress: 0, message: '' });
+    setUploadError(null);
   };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
     const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            if (isEdit && editingBillboard) { setEditingBillboard({...editingBillboard, imageUrl: base64}); } else { setNewBillboard({...newBillboard, imageUrl: base64}); }
-        };
-        reader.readAsDataURL(file);
+    if (!file) return;
+    
+    // Reset state
+    setUploadError(null);
+    setUploadProgress({ status: 'idle', progress: 0, message: '' });
+    
+    // Validate file first
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+        setUploadError(validation.error || 'Invalid file');
+        setUploadProgress({ status: 'error', progress: 0, message: validation.error || 'Invalid file' });
+        // Reset file input
+        e.target.value = '';
+        return;
     }
+    
+    try {
+        // Upload with progress tracking
+        const result = await uploadImageToSupabase(
+            file,
+            'billboards',
+            (progress) => setUploadProgress(progress)
+        );
+        
+        if (result.success && result.url) {
+            if (isEdit && editingBillboard) {
+                setEditingBillboard({ ...editingBillboard, imageUrl: result.url });
+            } else {
+                setNewBillboard({ ...newBillboard, imageUrl: result.url });
+            }
+            // Auto-clear success message after 3 seconds
+            setTimeout(() => {
+                setUploadProgress({ status: 'idle', progress: 0, message: '' });
+            }, 3000);
+        } else {
+            setUploadError(result.error || 'Upload failed');
+        }
+    } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Upload failed';
+        setUploadError(errorMsg);
+        setUploadProgress({ status: 'error', progress: 0, message: errorMsg });
+    }
+    
+    // Reset file input
+    e.target.value = '';
   };
 
   const getClientName = (clientId?: string) => { if(!clientId) return 'Available'; return clients.find(c => c.id === clientId)?.companyName || 'Unknown'; };
@@ -596,7 +657,7 @@ export const BillboardList: React.FC = () => {
                  </div>
              </div>
         ) : (
-            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
+            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-4' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 auto-rows-fr'}`}>
                 {filteredBillboards.map((b, idx) => {
                     // ... (render billboard cards logic same as before)
                     const status = getAvailabilityStatus(b);
@@ -606,15 +667,28 @@ export const BillboardList: React.FC = () => {
                     const hasImage = hasValidImage(b.imageUrl);
 
                     return viewMode === 'list' ? (
-                         <div key={b.id} className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-xl transition-all group hover:-translate-y-1">
+                         <div key={b.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-lg transition-all group hover:-translate-y-0.5">
                              <div className="relative">
                                  <div className="absolute -top-2 -left-2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md z-10 border border-white/20">#{idx + 1}</div>
-                                 <div className={`w-24 h-24 rounded-2xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group-hover:scale-105 transition-transform ${!hasImage ? gradientClass : ''}`}>
+                                 <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group-hover:scale-105 transition-transform ${!hasImage ? gradientClass : 'bg-slate-100'}`}>
                                      {hasImage ? (
                                          <img 
                                             src={b.imageUrl} 
                                             className="w-full h-full object-cover" 
-                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement?.classList.add(...gradientClass.split(' ')); }}
+                                            onError={(e) => { 
+                                                const target = e.target as HTMLImageElement;
+                                                target.style.display = 'none'; 
+                                                const parent = target.parentElement;
+                                                if (parent) {
+                                                    parent.classList.remove('bg-slate-100');
+                                                    gradientClass.split(' ').forEach(cls => parent.classList.add(cls));
+                                                    // Add placeholder
+                                                    const placeholder = document.createElement('div');
+                                                    placeholder.className = 'w-full h-full flex items-center justify-center text-white/30';
+                                                    placeholder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+                                                    parent.appendChild(placeholder);
+                                                }
+                                            }}
                                          />
                                      ) : ( <div className="w-full h-full flex items-center justify-center text-white/30"><ImageIcon size={28}/></div> )}
                                  </div>
@@ -673,12 +747,12 @@ export const BillboardList: React.FC = () => {
       {/* Add Modal... */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[200] overflow-y-auto">
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => { setIsAddModalOpen(false); setPickingLocation(false); }} />
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => { setIsAddModalOpen(false); setPickingLocation(false); setUploadProgress({ status: 'idle', progress: 0, message: '' }); setUploadError(null); }} />
             <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                 <div className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl border border-white/20">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                         <h3 className="text-xl font-bold text-slate-900">Add New Billboard</h3>
-                        <button onClick={() => { setIsAddModalOpen(false); setPickingLocation(false); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
+                        <button onClick={() => { setIsAddModalOpen(false); setPickingLocation(false); setUploadProgress({ status: 'idle', progress: 0, message: '' }); setUploadError(null); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
                     </div>
                     <form onSubmit={handleAddBillboard} className="p-8 space-y-6">
                         <div className="grid grid-cols-2 gap-6">
@@ -740,9 +814,61 @@ export const BillboardList: React.FC = () => {
                         <div className="space-y-4">
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Billboard Image</label>
                             <div className="flex items-center gap-4">
-                                {newBillboard.imageUrl && <img src={newBillboard.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
-                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, false)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"/>
+                                {newBillboard.imageUrl && (
+                                    <div className="relative group">
+                                        <img src={newBillboard.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                                        <button 
+                                            type="button"
+                                            onClick={() => setNewBillboard({...newBillboard, imageUrl: ''})}
+                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                                        >
+                                            <X size={12}/>
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="flex-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/jpeg,image/png,image/webp,image/gif" 
+                                        onChange={(e) => handleImageUpload(e, false)} 
+                                        disabled={uploadProgress.status === 'compressing' || uploadProgress.status === 'uploading'}
+                                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all disabled:opacity-50"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">Max 2MB • JPG, PNG, WebP, GIF</p>
+                                </div>
                             </div>
+                            
+                            {/* Upload Progress Indicator */}
+                            {uploadProgress.status !== 'idle' && (
+                                <div className={`p-3 rounded-xl border flex items-center gap-3 animate-fade-in ${
+                                    uploadProgress.status === 'error' ? 'bg-red-50 border-red-100' :
+                                    uploadProgress.status === 'complete' ? 'bg-emerald-50 border-emerald-100' :
+                                    'bg-indigo-50 border-indigo-100'
+                                }`}>
+                                    {uploadProgress.status === 'error' ? (
+                                        <XCircle size={18} className="text-red-500 shrink-0" />
+                                    ) : uploadProgress.status === 'complete' ? (
+                                        <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
+                                    ) : (
+                                        <Loader2 size={18} className="text-indigo-500 animate-spin shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-xs font-medium ${
+                                            uploadProgress.status === 'error' ? 'text-red-600' :
+                                            uploadProgress.status === 'complete' ? 'text-emerald-600' :
+                                            'text-indigo-600'
+                                        }`}>{uploadProgress.message}</p>
+                                        {uploadProgress.status !== 'error' && uploadProgress.status !== 'complete' && (
+                                            <div className="w-full bg-indigo-100 rounded-full h-1.5 mt-1.5">
+                                                <div 
+                                                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+                                                    style={{ width: `${uploadProgress.progress}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-4">
@@ -772,12 +898,12 @@ export const BillboardList: React.FC = () => {
       {/* Edit Modal - UPDATED with Width/Height */}
       {editingBillboard && (
         <div className="fixed inset-0 z-[200] overflow-y-auto">
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => { setEditingBillboard(null); setPickingLocation(false); }} />
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => { setEditingBillboard(null); setPickingLocation(false); setUploadProgress({ status: 'idle', progress: 0, message: '' }); setUploadError(null); }} />
             <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                 <div className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl border border-white/20">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
                         <h3 className="text-xl font-bold text-slate-900">Edit Billboard</h3>
-                        <button onClick={() => { setEditingBillboard(null); setPickingLocation(false); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
+                        <button onClick={() => { setEditingBillboard(null); setPickingLocation(false); setUploadProgress({ status: 'idle', progress: 0, message: '' }); setUploadError(null); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
                     </div>
                     <form onSubmit={handleSaveEdit} className="p-8 space-y-6">
                         <div className="grid grid-cols-2 gap-6">
@@ -854,9 +980,61 @@ export const BillboardList: React.FC = () => {
                         <div className="space-y-4">
                             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Billboard Image</label>
                             <div className="flex items-center gap-4">
-                                {editingBillboard.imageUrl && <img src={editingBillboard.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />}
-                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, true)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all"/>
+                                {editingBillboard.imageUrl && (
+                                    <div className="relative group">
+                                        <img src={editingBillboard.imageUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                                        <button 
+                                            type="button"
+                                            onClick={() => setEditingBillboard({...editingBillboard, imageUrl: ''})}
+                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                                        >
+                                            <X size={12}/>
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="flex-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/jpeg,image/png,image/webp,image/gif" 
+                                        onChange={(e) => handleImageUpload(e, true)} 
+                                        disabled={uploadProgress.status === 'compressing' || uploadProgress.status === 'uploading'}
+                                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-all disabled:opacity-50"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">Max 2MB • JPG, PNG, WebP, GIF</p>
+                                </div>
                             </div>
+                            
+                            {/* Upload Progress Indicator */}
+                            {uploadProgress.status !== 'idle' && (
+                                <div className={`p-3 rounded-xl border flex items-center gap-3 animate-fade-in ${
+                                    uploadProgress.status === 'error' ? 'bg-red-50 border-red-100' :
+                                    uploadProgress.status === 'complete' ? 'bg-emerald-50 border-emerald-100' :
+                                    'bg-indigo-50 border-indigo-100'
+                                }`}>
+                                    {uploadProgress.status === 'error' ? (
+                                        <XCircle size={18} className="text-red-500 shrink-0" />
+                                    ) : uploadProgress.status === 'complete' ? (
+                                        <CheckCircle2 size={18} className="text-emerald-500 shrink-0" />
+                                    ) : (
+                                        <Loader2 size={18} className="text-indigo-500 animate-spin shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-xs font-medium ${
+                                            uploadProgress.status === 'error' ? 'text-red-600' :
+                                            uploadProgress.status === 'complete' ? 'text-emerald-600' :
+                                            'text-indigo-600'
+                                        }`}>{uploadProgress.message}</p>
+                                        {uploadProgress.status !== 'error' && uploadProgress.status !== 'complete' && (
+                                            <div className="w-full bg-indigo-100 rounded-full h-1.5 mt-1.5">
+                                                <div 
+                                                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" 
+                                                    style={{ width: `${uploadProgress.progress}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-4">
