@@ -1,5 +1,5 @@
 // AI Service for Groq-powered billboard suggestions
-// Uses Groq API with Llama 3.1 for blazing fast AI responses
+// Uses Groq API with Llama 3.3 for blazing fast AI responses
 
 const GROQ_API_KEY = (window as any).process?.env?.GROQ_API_KEY || process.env.GROQ_API_KEY;
 
@@ -26,7 +26,7 @@ async function callGroq(prompt: string): Promise<AIGenerationResult> {
           'Authorization': `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'llama-3.1-70b-versatile',
+          model: 'llama-3.3-70b-versatile',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.7,
           max_tokens: 500,
