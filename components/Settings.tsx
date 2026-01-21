@@ -438,16 +438,19 @@ export const Settings: React.FC = () => {
 
   const handleDownloadBackup = () => {
     const json = createSystemBackup();
+    const backup = JSON.parse(json);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `billboard_suite_backup_${new Date().toISOString().slice(0,10)}.json`);
+    const dateStr = new Date().toISOString().slice(0,10);
+    const timeStr = new Date().toTimeString().slice(0,5).replace(':', '-');
+    link.setAttribute('download', `dreambox_backup_${dateStr}_${timeStr}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     setBackupStatus(prev => ({ ...prev, manual: getLastManualBackupDate() }));
-    showSuccess('JSON backup downloaded');
+    showSuccess(`Backup downloaded! ${backup.stats?.totalRecords || 'All'} records exported.`);
   };
 
   const handleExcelBackup = async () => {

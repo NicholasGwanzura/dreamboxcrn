@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Billboard, BillboardType, Client, Contract } from '../types';
 import { getBillboards, getBillboardsAsync, addBillboard, updateBillboard, deleteBillboard, clients, ZIM_TOWNS, addClient, addContract, getClients, updateClient, getContracts, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
 import { uploadImageToSupabase, ImageUploadProgress, validateImageFile } from '../services/supabaseClient';
-import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { generateVisibilityNotes, estimateDailyTraffic, suggestCoordinates, generateAllSuggestions, isAIServiceAvailable } from '../services/aiService';
+import { MapPin, X, Edit2, Save, Plus, Image as ImageIcon, Map as MapIcon, Grid as GridIcon, Trash2, AlertTriangle, Share2, Eye, List as ListIcon, Search, Link2, Upload, Download, Layers, Users, RefreshCw, Car, ZoomIn, Maximize2, Hash, Zap, MousePointer2, FileText, Globe, Loader2, CheckCircle2, XCircle, Sparkles, Wand2 } from 'lucide-react';
 import L from 'leaflet';
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false }: any) => (
@@ -227,6 +228,148 @@ export const BillboardList: React.FC = () => {
   // Image upload state
   const [uploadProgress, setUploadProgress] = useState<ImageUploadProgress>({ status: 'idle', progress: 0, message: '' });
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // AI assistance state
+  const [aiLoading, setAiLoading] = useState<{ visibility: boolean; traffic: boolean; coords: boolean; all: boolean }>({
+    visibility: false, traffic: false, coords: false, all: false
+  });
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // AI suggestion handlers
+  const handleAISuggestVisibility = async (isEditing: boolean) => {
+    const billboard = isEditing ? editingBillboard : newBillboard;
+    if (!billboard?.name || !billboard?.town) {
+      setAiError('Please enter billboard name and town first');
+      setTimeout(() => setAiError(null), 3000);
+      return;
+    }
+    
+    setAiLoading(prev => ({ ...prev, visibility: true }));
+    setAiError(null);
+    
+    try {
+      const result = await generateVisibilityNotes(billboard.name, billboard.town, billboard.location);
+      if (result.success && result.data) {
+        if (isEditing && editingBillboard) {
+          setEditingBillboard({ ...editingBillboard, visibility: result.data });
+        } else {
+          setNewBillboard({ ...newBillboard, visibility: result.data });
+        }
+      } else {
+        setAiError(result.error || 'Failed to generate visibility notes');
+        setTimeout(() => setAiError(null), 5000);
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'AI request failed');
+      setTimeout(() => setAiError(null), 5000);
+    } finally {
+      setAiLoading(prev => ({ ...prev, visibility: false }));
+    }
+  };
+
+  const handleAISuggestTraffic = async (isEditing: boolean) => {
+    const billboard = isEditing ? editingBillboard : newBillboard;
+    if (!billboard?.town) {
+      setAiError('Please select a town first');
+      setTimeout(() => setAiError(null), 3000);
+      return;
+    }
+    
+    setAiLoading(prev => ({ ...prev, traffic: true }));
+    setAiError(null);
+    
+    try {
+      const result = await estimateDailyTraffic(billboard.town, billboard.location);
+      if (result.success && result.data) {
+        if (isEditing && editingBillboard) {
+          setEditingBillboard({ ...editingBillboard, dailyTraffic: result.data });
+        } else {
+          setNewBillboard({ ...newBillboard, dailyTraffic: result.data });
+        }
+      } else {
+        setAiError(result.error || 'Failed to estimate traffic');
+        setTimeout(() => setAiError(null), 5000);
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'AI request failed');
+      setTimeout(() => setAiError(null), 5000);
+    } finally {
+      setAiLoading(prev => ({ ...prev, traffic: false }));
+    }
+  };
+
+  const handleAISuggestCoords = async (isEditing: boolean) => {
+    const billboard = isEditing ? editingBillboard : newBillboard;
+    if (!billboard?.town) {
+      setAiError('Please select a town first');
+      setTimeout(() => setAiError(null), 3000);
+      return;
+    }
+    
+    setAiLoading(prev => ({ ...prev, coords: true }));
+    setAiError(null);
+    
+    try {
+      const result = await suggestCoordinates(billboard.town, billboard.location);
+      if (result.success && result.data) {
+        if (isEditing && editingBillboard) {
+          setEditingBillboard({ ...editingBillboard, coordinates: result.data });
+        } else {
+          setNewBillboard({ ...newBillboard, coordinates: result.data });
+        }
+      } else {
+        setAiError(result.error || 'Failed to suggest coordinates');
+        setTimeout(() => setAiError(null), 5000);
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'AI request failed');
+      setTimeout(() => setAiError(null), 5000);
+    } finally {
+      setAiLoading(prev => ({ ...prev, coords: false }));
+    }
+  };
+
+  const handleAISuggestAll = async (isEditing: boolean) => {
+    const billboard = isEditing ? editingBillboard : newBillboard;
+    if (!billboard?.name || !billboard?.town) {
+      setAiError('Please enter billboard name and town first');
+      setTimeout(() => setAiError(null), 3000);
+      return;
+    }
+    
+    setAiLoading({ visibility: true, traffic: true, coords: true, all: true });
+    setAiError(null);
+    
+    try {
+      const result = await generateAllSuggestions(billboard.name, billboard.town, billboard.location);
+      
+      if (isEditing && editingBillboard) {
+        setEditingBillboard({
+          ...editingBillboard,
+          ...(result.visibility && { visibility: result.visibility }),
+          ...(result.dailyTraffic && { dailyTraffic: result.dailyTraffic }),
+          ...(result.coordinates && { coordinates: result.coordinates })
+        });
+      } else {
+        setNewBillboard({
+          ...newBillboard,
+          ...(result.visibility && { visibility: result.visibility }),
+          ...(result.dailyTraffic && { dailyTraffic: result.dailyTraffic }),
+          ...(result.coordinates && { coordinates: result.coordinates })
+        });
+      }
+      
+      if (result.errors.length > 0) {
+        setAiError(result.errors.join('; '));
+        setTimeout(() => setAiError(null), 5000);
+      }
+    } catch (err: any) {
+      setAiError(err.message || 'AI request failed');
+      setTimeout(() => setAiError(null), 5000);
+    } finally {
+      setAiLoading({ visibility: false, traffic: false, coords: false, all: false });
+    }
+  };
 
   // PRIORITY: Load billboards from Supabase first on mount
   useEffect(() => {
@@ -769,6 +912,15 @@ export const BillboardList: React.FC = () => {
                                         <MinimalInput label="Lng" type="number" value={newBillboard.coordinates?.lng} onChange={(e: any) => setNewBillboard({...newBillboard, coordinates: {...newBillboard.coordinates!, lng: Number(e.target.value)}})} />
                                     </div>
                                 </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleAISuggestCoords(false)} 
+                                    disabled={aiLoading.coords || aiLoading.all}
+                                    className="mb-2 p-2 rounded-lg transition-colors bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-50" 
+                                    title="AI Suggest Coordinates"
+                                >
+                                    {aiLoading.coords ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}
+                                </button>
                                 <button type="button" onClick={() => setPickingLocation(!pickingLocation)} className={`mb-2 p-2 rounded-lg transition-colors ${pickingLocation ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`} title="Pick on Map">
                                     <MousePointer2 size={18}/>
                                 </button>
@@ -872,7 +1024,18 @@ export const BillboardList: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleAISuggestVisibility(false)}
+                                    disabled={aiLoading.visibility || aiLoading.all}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {aiLoading.visibility ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                    AI Generate
+                                </button>
+                            </div>
                             <textarea 
                                 value={newBillboard.visibility} 
                                 onChange={(e: any) => setNewBillboard({...newBillboard, visibility: e.target.value})} 
@@ -883,8 +1046,39 @@ export const BillboardList: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <MinimalInput label="Est. Daily Traffic" type="number" value={newBillboard.dailyTraffic} onChange={(e: any) => setNewBillboard({...newBillboard, dailyTraffic: Number(e.target.value)})} />
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Est. Daily Traffic</label>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleAISuggestTraffic(false)}
+                                    disabled={aiLoading.traffic || aiLoading.all}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {aiLoading.traffic ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                    AI Estimate
+                                </button>
+                            </div>
+                            <MinimalInput label="Daily Views" type="number" value={newBillboard.dailyTraffic} onChange={(e: any) => setNewBillboard({...newBillboard, dailyTraffic: Number(e.target.value)})} />
                         </div>
+
+                        {/* AI Error Message */}
+                        {aiError && (
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 animate-fade-in">
+                                <AlertTriangle size={16} className="text-amber-500 shrink-0"/>
+                                <p className="text-xs text-amber-700">{aiError}</p>
+                            </div>
+                        )}
+
+                        {/* Auto-fill All with AI */}
+                        <button 
+                            type="button" 
+                            onClick={() => handleAISuggestAll(false)}
+                            disabled={aiLoading.all}
+                            className="w-full py-3 text-violet-700 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-xl hover:from-violet-100 hover:to-indigo-100 flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                        >
+                            {aiLoading.all ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}
+                            Auto-fill with AI
+                        </button>
 
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-[1.02]">
                             <Save size={18} /> Save Asset
@@ -934,6 +1128,15 @@ export const BillboardList: React.FC = () => {
                                     <MinimalInput label="Lng" type="number" value={editingBillboard.coordinates?.lng} onChange={(e: any) => setEditingBillboard({...editingBillboard, coordinates: {...editingBillboard.coordinates!, lng: Number(e.target.value)}})} />
                                 </div>
                             </div>
+                            <button 
+                                type="button" 
+                                onClick={() => handleAISuggestCoords(true)} 
+                                disabled={aiLoading.coords || aiLoading.all}
+                                className="mb-2 p-2 rounded-lg transition-colors bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-50" 
+                                title="AI Suggest Coordinates"
+                            >
+                                {aiLoading.coords ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}
+                            </button>
                             <button type="button" onClick={() => setPickingLocation(!pickingLocation)} className={`mb-2 p-2 rounded-lg transition-colors ${pickingLocation ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`} title="Pick on Map">
                                 <MousePointer2 size={18}/>
                             </button>
@@ -1038,7 +1241,18 @@ export const BillboardList: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Visibility Notes</label>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleAISuggestVisibility(true)}
+                                    disabled={aiLoading.visibility || aiLoading.all}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {aiLoading.visibility ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                    AI Generate
+                                </button>
+                            </div>
                             <textarea 
                                 value={editingBillboard.visibility} 
                                 onChange={(e: any) => setEditingBillboard({...editingBillboard, visibility: e.target.value})} 
@@ -1049,11 +1263,43 @@ export const BillboardList: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                            <MinimalInput label="Est. Daily Traffic" type="number" value={editingBillboard.dailyTraffic} onChange={(e: any) => setEditingBillboard({...editingBillboard, dailyTraffic: Number(e.target.value)})} />
+                            <div className="flex items-center justify-between">
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">Est. Daily Traffic</label>
+                                <button 
+                                    type="button" 
+                                    onClick={() => handleAISuggestTraffic(true)}
+                                    disabled={aiLoading.traffic || aiLoading.all}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    {aiLoading.traffic ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                    AI Estimate
+                                </button>
+                            </div>
+                            <MinimalInput label="Daily Views" type="number" value={editingBillboard.dailyTraffic} onChange={(e: any) => setEditingBillboard({...editingBillboard, dailyTraffic: Number(e.target.value)})} />
                         </div>
+
+                        {/* AI Error Message */}
+                        {aiError && (
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 animate-fade-in">
+                                <AlertTriangle size={16} className="text-amber-500 shrink-0"/>
+                                <p className="text-xs text-amber-700">{aiError}</p>
+                            </div>
+                        )}
+
+                        {/* Auto-fill All with AI */}
+                        <button 
+                            type="button" 
+                            onClick={() => handleAISuggestAll(true)}
+                            disabled={aiLoading.all}
+                            className="w-full py-3 text-violet-700 bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 rounded-xl hover:from-violet-100 hover:to-indigo-100 flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                        >
+                            {aiLoading.all ? <Loader2 size={18} className="animate-spin"/> : <Wand2 size={18}/>}
+                            Auto-fill with AI
+                        </button>
                         
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-[1.02]">
                             <Save size={18} /> Update Asset
+                        </button>
                         </button>
                     </form>
                 </div>

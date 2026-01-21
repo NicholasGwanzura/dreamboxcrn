@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getCurrentUser, logout } from '../services/authService';
 import { getSystemAlertCount, triggerAutoBackup, runAutoBilling, runMaintenanceCheck, triggerFullSync } from '../services/mockData';
+import { isSupabaseConfigured, checkSupabaseConnection } from '../services/supabaseClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -55,6 +56,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
   const [alertCount, setAlertCount] = useState(0);
   const [dbConnected, setDbConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
   const user = getCurrentUser();
 
   useEffect(() => {
@@ -62,7 +64,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
     triggerAutoBackup();
     runAutoBilling();
     runMaintenanceCheck();
-    setDbConnected(!!localStorage.getItem('sb_url'));
+    
+    // Check actual Supabase connection
+    const checkConnection = async () => {
+      setIsCheckingConnection(true);
+      if (isSupabaseConfigured()) {
+        const connected = await checkSupabaseConnection();
+        setDbConnected(connected);
+      } else {
+        setDbConnected(false);
+      }
+      setIsCheckingConnection(false);
+    };
+    
+    checkConnection();
+    // Re-check connection every 30 seconds
+    const connectionCheckInterval = setInterval(checkConnection, 30000);
 
     const interval = setInterval(() => setAlertCount(getSystemAlertCount()), 10000);
     const backupInterval = setInterval(() => triggerAutoBackup(), 5 * 60 * 1000);
@@ -87,6 +104,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
         clearInterval(billingInterval);
         clearInterval(maintenanceInterval);
         clearInterval(syncInterval);
+        clearInterval(connectionCheckInterval);
         window.removeEventListener('focus', handleFocus);
     };
   }, [currentPage, dbConnected]);
@@ -167,11 +185,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
            </div>
            
            <div className="flex items-center justify-between text-[10px] text-slate-500 mt-3 px-2">
-              <span className={`flex items-center gap-1.5 ${dbConnected ? 'text-emerald-400' : 'text-slate-500'}`}>
-                  {isSyncing ? <RefreshCw size={10} className="animate-spin" /> : <Database size={10} />}
-                  {dbConnected ? (isSyncing ? 'Syncing' : 'Connected') : 'Offline'}
+              <span className={`flex items-center gap-1.5 ${dbConnected ? 'text-emerald-400' : isCheckingConnection ? 'text-amber-400' : 'text-red-400'}`}>
+                  {isSyncing ? (
+                    <RefreshCw size={10} className="animate-spin" />
+                  ) : (
+                    <span className="relative flex h-2.5 w-2.5">
+                      {dbConnected && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      )}
+                      <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dbConnected ? 'bg-emerald-500' : isCheckingConnection ? 'bg-amber-500' : 'bg-red-500'}`}></span>
+                    </span>
+                  )}
+                  {isCheckingConnection ? 'Checking...' : dbConnected ? (isSyncing ? 'Syncing' : 'Supabase Connected') : 'Disconnected'}
               </span>
-              <span className="font-mono">v2.0.1</span>
+              <span className="font-mono">v2.2.0</span>
            </div>
         </div>
       </aside>

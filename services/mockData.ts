@@ -134,8 +134,21 @@ const deleteFromSupabase = async (table: string, id: string) => {
 }
 
 export const syncToSupabase = async (table: string, data: any) => {
-    if (!supabase) return;
-    try { const { error } = await supabase.from(table).upsert(data); if (error) console.error(`Supabase Sync Error (${table}):`, error); } catch (e) { console.error(`Supabase Exception (${table}):`, e); }
+    if (!supabase) {
+        console.log(`⚠️ Supabase not configured, skipping sync for ${table}`);
+        return;
+    }
+    try { 
+        console.log(`📤 Syncing to ${table}:`, data.id || data);
+        const { error } = await supabase.from(table).upsert(data); 
+        if (error) {
+            console.error(`❌ Supabase Sync Error (${table}):`, error.message, error);
+        } else {
+            console.log(`✅ Synced to ${table} successfully`);
+        }
+    } catch (e) { 
+        console.error(`❌ Supabase Exception (${table}):`, e); 
+    }
 };
 
 /**
@@ -144,8 +157,11 @@ export const syncToSupabase = async (table: string, data: any) => {
  * RULE: Supabase is ALWAYS the source of truth - localStorage is just cache
  */
 export const pullAllDataFromSupabase = async (): Promise<boolean> => {
+    console.log('📡 pullAllDataFromSupabase called');
+    console.log('📡 Supabase client exists:', !!supabase);
+    
     if (!supabase) {
-        console.warn('Supabase not configured, using localStorage fallback');
+        console.warn('❌ Supabase not configured, using localStorage fallback');
         return false;
     }
 
@@ -416,12 +432,256 @@ export const getCompanyProfile = () => companyProfile;
 export const createCompanyProfile = (profile: CompanyProfile) => { companyProfile = profile; saveToStorage(STORAGE_KEYS.PROFILE, companyProfile); if(supabase) syncToSupabase('company_profile', { ...profile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Create', 'Created company profile'); notifyListeners(); };
 export const updateCompanyProfile = (profile: CompanyProfile) => { companyProfile = profile; saveToStorage(STORAGE_KEYS.PROFILE, companyProfile); if(supabase) syncToSupabase('company_profile', { ...profile, id: 'profile_v1', logo: companyLogo }); logAction('Settings Update', 'Updated company profile details'); notifyListeners(); };
 export const resetCompanyProfile = () => { companyProfile = DEFAULT_PROFILE; saveToStorage(STORAGE_KEYS.PROFILE, companyProfile); if(supabase) syncToSupabase('company_profile', { ...DEFAULT_PROFILE, id: 'profile_v1', logo: companyLogo }); logAction('Settings Reset', 'Reset company profile to defaults'); notifyListeners(); };
-export const createSystemBackup = () => { const now = new Date().toLocaleString(); lastBackupDate = now; saveToStorage(STORAGE_KEYS.LAST_BACKUP, lastBackupDate); syncToCloudMirror(); return JSON.stringify({ version: '1.9.26', timestamp: new Date().toISOString(), data: { billboards, contracts, clients, invoices, expenses, users, outsourcedBillboards, auditLogs, printingJobs, companyLogo, companyProfile, tasks, maintenanceLogs } }, null, 2); };
+export const createSystemBackup = () => { 
+    const now = new Date();
+    lastBackupDate = now.toLocaleString(); 
+    saveToStorage(STORAGE_KEYS.LAST_BACKUP, lastBackupDate); 
+    syncToCloudMirror(); 
+    
+    // Create comprehensive backup with metadata
+    const backup = {
+        // Metadata
+        version: '2.0.0',
+        appName: 'Dreambox Billboard Suite',
+        timestamp: now.toISOString(),
+        createdAt: now.toLocaleString(),
+        
+        // Statistics for verification
+        stats: {
+            billboards: billboards.length,
+            clients: clients.length,
+            contracts: contracts.length,
+            invoices: invoices.length,
+            expenses: expenses.length,
+            users: users.length,
+            tasks: tasks.length,
+            maintenanceLogs: maintenanceLogs.length,
+            outsourcedBillboards: outsourcedBillboards.length,
+            printingJobs: printingJobs.length,
+            auditLogs: auditLogs.length,
+            totalRecords: billboards.length + clients.length + contracts.length + 
+                          invoices.length + expenses.length + users.length + 
+                          tasks.length + maintenanceLogs.length + 
+                          outsourcedBillboards.length + printingJobs.length
+        },
+        
+        // All data
+        data: { 
+            billboards, 
+            contracts, 
+            clients, 
+            invoices, 
+            expenses, 
+            users, 
+            outsourcedBillboards, 
+            auditLogs, 
+            printingJobs, 
+            companyLogo, 
+            companyProfile, 
+            tasks, 
+            maintenanceLogs 
+        }
+    };
+    
+    console.log(`📦 Backup created with ${backup.stats.totalRecords} total records`);
+    logAction('System Backup', `Created backup with ${backup.stats.totalRecords} records`);
+    
+    return JSON.stringify(backup, null, 2); 
+};
 export const simulateCloudSync = async () => { await new Promise(resolve => setTimeout(resolve, 2000)); syncToCloudMirror(); if(supabase) await triggerFullSync(); lastCloudBackup = new Date().toLocaleString(); saveToStorage(STORAGE_KEYS.CLOUD_BACKUP, lastCloudBackup); logAction('System', 'Cloud backup completed successfully (Redundant Mirror)'); notifyListeners(); return lastCloudBackup; };
 export const getLastCloudBackupDate = () => lastCloudBackup; export const restoreDefaultBillboards = () => 0; export const triggerAutoBackup = () => { saveToStorage(STORAGE_KEYS.AUTO_BACKUP, { timestamp: new Date().toISOString(), data: { billboards, contracts, clients, invoices, expenses, users, outsourcedBillboards, auditLogs, printingJobs, companyLogo, companyProfile, tasks, maintenanceLogs } }); syncToCloudMirror(); return new Date().toLocaleString(); };
 export const runAutoBilling = () => { /* ... existing ... */ return 0; };
 export const runMaintenanceCheck = () => 0; export const getAutoBackupStatus = () => { const autoBackup = loadFromStorage(STORAGE_KEYS.AUTO_BACKUP, null); return autoBackup ? new Date(autoBackup.timestamp).toLocaleString() : 'None'; }; export const getLastManualBackupDate = () => lastBackupDate;
-export const restoreSystemBackup = async (jsonString: string) => { /* ... existing ... */ return { success: false, count: 0 }; };
+export const restoreSystemBackup = async (jsonString: string): Promise<{ success: boolean; count: number }> => { 
+    try {
+        const backup = JSON.parse(jsonString);
+        if (!backup.data) {
+            console.error('Invalid backup format: missing data property');
+            return { success: false, count: 0 };
+        }
+
+        const data = backup.data;
+        let itemCount = 0;
+
+        console.log('🔄 Restoring backup from:', backup.timestamp || 'unknown date');
+
+        // Restore each data type to local storage AND sync to Supabase
+        if (data.billboards && Array.isArray(data.billboards)) {
+            billboards = data.billboards;
+            saveToStorage(STORAGE_KEYS.BILLBOARDS, billboards);
+            itemCount += billboards.length;
+            console.log(`📋 Restored ${billboards.length} billboards`);
+        }
+
+        if (data.clients && Array.isArray(data.clients)) {
+            clients = data.clients;
+            saveToStorage(STORAGE_KEYS.CLIENTS, clients);
+            itemCount += clients.length;
+            console.log(`👥 Restored ${clients.length} clients`);
+        }
+
+        if (data.contracts && Array.isArray(data.contracts)) {
+            contracts = data.contracts;
+            saveToStorage(STORAGE_KEYS.CONTRACTS, contracts);
+            itemCount += contracts.length;
+            console.log(`📝 Restored ${contracts.length} contracts`);
+        }
+
+        if (data.invoices && Array.isArray(data.invoices)) {
+            invoices = data.invoices;
+            saveToStorage(STORAGE_KEYS.INVOICES, invoices);
+            itemCount += invoices.length;
+            console.log(`💰 Restored ${invoices.length} invoices`);
+        }
+
+        if (data.expenses && Array.isArray(data.expenses)) {
+            expenses = data.expenses;
+            saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
+            itemCount += expenses.length;
+            console.log(`💸 Restored ${expenses.length} expenses`);
+        }
+
+        if (data.users && Array.isArray(data.users)) {
+            users = data.users;
+            saveToStorage(STORAGE_KEYS.USERS, users);
+            itemCount += users.length;
+            console.log(`👤 Restored ${users.length} users`);
+        }
+
+        if (data.tasks && Array.isArray(data.tasks)) {
+            tasks = data.tasks;
+            saveToStorage(STORAGE_KEYS.TASKS, tasks);
+            itemCount += tasks.length;
+            console.log(`✅ Restored ${tasks.length} tasks`);
+        }
+
+        if (data.maintenanceLogs && Array.isArray(data.maintenanceLogs)) {
+            maintenanceLogs = data.maintenanceLogs;
+            saveToStorage(STORAGE_KEYS.MAINTENANCE, maintenanceLogs);
+            itemCount += maintenanceLogs.length;
+            console.log(`🔧 Restored ${maintenanceLogs.length} maintenance logs`);
+        }
+
+        if (data.outsourcedBillboards && Array.isArray(data.outsourcedBillboards)) {
+            outsourcedBillboards = data.outsourcedBillboards;
+            saveToStorage(STORAGE_KEYS.OUTSOURCED, outsourcedBillboards);
+            itemCount += outsourcedBillboards.length;
+            console.log(`🌐 Restored ${outsourcedBillboards.length} outsourced billboards`);
+        }
+
+        if (data.printingJobs && Array.isArray(data.printingJobs)) {
+            printingJobs = data.printingJobs;
+            saveToStorage(STORAGE_KEYS.PRINTING, printingJobs);
+            itemCount += printingJobs.length;
+            console.log(`🖨️ Restored ${printingJobs.length} printing jobs`);
+        }
+
+        if (data.auditLogs && Array.isArray(data.auditLogs)) {
+            auditLogs = data.auditLogs;
+            saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+            console.log(`📜 Restored ${auditLogs.length} audit logs`);
+        }
+
+        if (data.companyProfile) {
+            companyProfile = data.companyProfile;
+            saveToStorage(STORAGE_KEYS.PROFILE, companyProfile);
+            console.log(`🏢 Restored company profile`);
+        }
+
+        if (data.companyLogo) {
+            companyLogo = data.companyLogo;
+            saveToStorage(STORAGE_KEYS.LOGO, companyLogo);
+            console.log(`🖼️ Restored company logo`);
+        }
+
+        // Mark restore timestamp for sync priority
+        localStorage.setItem(STORAGE_KEYS.RESTORE_TIMESTAMP, Date.now().toString());
+
+        // NOW SYNC EVERYTHING TO SUPABASE
+        if (supabase) {
+            console.log('☁️ Pushing restored data to Supabase...');
+            
+            // Sync all tables to Supabase (upsert each record)
+            const syncPromises: Promise<void>[] = [];
+
+            // Billboards
+            for (const billboard of billboards) {
+                syncPromises.push(syncToSupabase('billboards', billboard));
+            }
+
+            // Clients
+            for (const client of clients) {
+                syncPromises.push(syncToSupabase('clients', client));
+            }
+
+            // Contracts
+            for (const contract of contracts) {
+                syncPromises.push(syncToSupabase('contracts', contract));
+            }
+
+            // Invoices
+            for (const invoice of invoices) {
+                syncPromises.push(syncToSupabase('invoices', invoice));
+            }
+
+            // Expenses
+            for (const expense of expenses) {
+                syncPromises.push(syncToSupabase('expenses', expense));
+            }
+
+            // Users
+            for (const user of users) {
+                syncPromises.push(syncToSupabase('users', user));
+            }
+
+            // Tasks
+            for (const task of tasks) {
+                syncPromises.push(syncToSupabase('tasks', task));
+            }
+
+            // Maintenance logs
+            for (const log of maintenanceLogs) {
+                syncPromises.push(syncToSupabase('maintenance_logs', log));
+            }
+
+            // Outsourced billboards
+            for (const ob of outsourcedBillboards) {
+                syncPromises.push(syncToSupabase('outsourced_billboards', ob));
+            }
+
+            // Printing jobs
+            for (const job of printingJobs) {
+                syncPromises.push(syncToSupabase('printing_jobs', job));
+            }
+
+            // Company profile
+            if (companyProfile) {
+                syncPromises.push(syncToSupabase('company_profile', { 
+                    ...companyProfile, 
+                    id: 'profile_v1', 
+                    logo: companyLogo 
+                }));
+            }
+
+            // Wait for all syncs to complete
+            await Promise.all(syncPromises);
+            console.log(`✅ Pushed ${syncPromises.length} records to Supabase`);
+        }
+
+        // Log the restore action
+        logAction('System Restore', `Restored ${itemCount} items from backup (${backup.timestamp || 'unknown date'})`);
+        
+        // Notify all listeners to refresh UI
+        notifyListeners();
+        
+        console.log(`✅ RESTORE COMPLETE! ${itemCount} items restored and synced to cloud.`);
+        return { success: true, count: itemCount };
+
+    } catch (error: any) {
+        console.error('❌ Restore failed:', error);
+        return { success: false, count: 0 };
+    }
+};
 
 // ===== AUDIT LOG CRUD =====
 
@@ -652,8 +912,43 @@ export const deleteMaintenanceLog = (id: string) => { const target = maintenance
 
 export const RELEASE_NOTES = [
     {
+        version: '2.2.0',
+        date: 'January 21, 2026',
+        title: 'AI-Powered Billboard Intelligence',
+        features: [
+            'AI Visibility Notes: Generate professional visibility analysis with one click using Google Gemini.',
+            'Traffic Estimation: AI estimates daily traffic based on Zimbabwe location data.',
+            'Smart Coordinates: Auto-suggest GPS coordinates from town and location names.',
+            'Auto-fill All: Single button to populate visibility, traffic, and coordinates at once.',
+            'Version: 2.2.0 - The AI Intelligence Update.'
+        ]
+    },
+    {
+        version: '2.1.0',
+        date: 'January 21, 2026',
+        title: 'Cloud Sync & Backup Overhaul',
+        features: [
+            'Supabase Integration: Full cloud database sync - your data is now safely stored in the cloud.',
+            'Enhanced Backup: Export includes statistics and metadata for easy verification.',
+            'Smart Restore: Upload backup files to instantly sync all data to Supabase.',
+            'Connection Status: Live pulsing indicator shows real-time Supabase connection health.',
+            'RLS Security: Row-level security policies protect your data in the cloud.'
+        ]
+    },
+    {
+        version: '2.0.1',
+        date: 'January 21, 2026',
+        title: 'Production Deployment',
+        features: [
+            'Vercel Deployment: App now live on Vercel with environment variables.',
+            'Auth State Sync: Data automatically pulls from Supabase on login.',
+            'Debug Logging: Enhanced console logs for troubleshooting sync issues.',
+            'Version: 2.0.1 - The Deployment Update.'
+        ]
+    },
+    {
         version: '1.9.26',
-        date: new Date().toLocaleDateString(),
+        date: 'January 20, 2026',
         title: 'User Email Notification',
         features: [
             'Communications: "Approve User" now automatically triggers your email client to send login credentials to the new user.',
@@ -675,13 +970,18 @@ export const markSupabaseSynced = () => { supabaseSyncComplete = true; };
 
 // Fetch fresh data from Supabase for a specific table
 const fetchFromSupabase = async <T>(tableName: string, fallbackData: T[]): Promise<T[]> => {
-    if (!supabase) return fallbackData;
+    if (!supabase) {
+        console.log(`⚠️ Supabase not configured, using local cache for ${tableName}`);
+        return fallbackData;
+    }
     try {
+        console.log(`📡 Fetching ${tableName} from Supabase...`);
         const { data, error } = await supabase.from(tableName).select('*');
         if (error) {
-            console.warn(`⚠️ Supabase fetch error for ${tableName}:`, error.message);
+            console.error(`❌ Supabase fetch error for ${tableName}:`, error.message, error);
             return fallbackData;
         }
+        console.log(`✅ Fetched ${data?.length || 0} records from ${tableName}`);
         return (data as T[]) || fallbackData;
     } catch (e) {
         console.error(`❌ Exception fetching ${tableName}:`, e);

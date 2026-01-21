@@ -1,7 +1,8 @@
 import { supabase, isSupabaseConfigured as checkSupabaseConfigured } from './supabaseClient';
 import { User } from '../types';
+import { getUsers, pullAllDataFromSupabase } from './mockData';
 
-// Production mode: Only Supabase functions are used for data operations\nimport { getUsers, pullAllDataFromSupabase } from './mockData';\n\n// Try to fetch users through a secured Supabase Edge Function that holds the service role key.
+// Try to fetch users through a secured Supabase Edge Function that holds the service role key.
 const fetchUsersViaEdge = async (): Promise<User[]> => {
     console.log("📡 Calling admin-list-users Edge Function...");
     const { data, error } = await supabase.functions.invoke('admin-list-users');

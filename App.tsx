@@ -117,10 +117,25 @@ const App: React.FC = () => {
     initAuth();
 
     // Listen for auth state changes
-    const unsubscribe = onAuthStateChange((user) => {
+    const unsubscribe = onAuthStateChange(async (user) => {
       if (user) {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        
+        // CRITICAL: Pull data from Supabase when auth state changes to logged-in
+        if (isSupabaseConfigured()) {
+          console.log('🔄 Auth state changed to logged-in - syncing data from Supabase...');
+          try {
+            const syncSuccess = await pullAllDataFromSupabase();
+            if (syncSuccess) {
+              console.log('✅ Data synced from Supabase after auth state change');
+            } else {
+              console.warn('⚠️ Data sync incomplete after auth state change');
+            }
+          } catch (syncErr) {
+            console.error('❌ Error syncing data after auth state change:', syncErr);
+          }
+        }
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
