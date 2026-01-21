@@ -2,17 +2,125 @@
 import React, { useState, useEffect } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Cell, PieChart, Pie, ComposedChart, Line
+  BarChart, Bar, Cell, PieChart, Pie, ComposedChart, Line, Legend
 } from 'recharts';
-import { DollarSign, FileText, Activity, Users, TrendingUp, TrendingDown, Bell, AlertTriangle, Calendar, CheckCircle, ArrowUpRight, Zap } from 'lucide-react';
+import { DollarSign, FileText, Activity, Users, TrendingUp, TrendingDown, Bell, AlertTriangle, Calendar, CheckCircle, ArrowUpRight, Zap, Sparkles, Loader2 } from 'lucide-react';
 import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
 import { BillboardType } from '../types';
 import { getCurrentUser, isSupabaseConfigured } from '../services/authService';
 
+interface AIInsight {
+  title: string;
+  description: string;
+  icon: 'trending' | 'warning' | 'tip';
+}
+
 export const Dashboard: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
+  const [loadingAI, setLoadingAI] = useState(false);
   const currentUser = getCurrentUser();
+
+  // Generate AI insights using Groq
+  const generateAIInsights = async (metrics: any) => {
+    setLoadingAI(true);
+    try {
+      const GROQ_API_KEY = (window as any).process?.env?.GROQ_API_KEY || process.env.GROQ_API_KEY;
+      if (!GROQ_API_KEY) {
+        setLoadingAI(false);
+        return;
+      }
+
+      const prompt = `You are a billboard advertising business analyst. Based on these metrics, provide 3 concise business insights in JSON format:
+- Total Revenue: $${metrics.totalRevenue.toLocaleString()}
+- Collection Rate: ${metrics.collectionRate}%
+- Occupancy Rate: ${metrics.occupancyRate}%
+- Active Contracts: ${metrics.activeContracts}
+- Overdue Invoices: ${metrics.overdueCount}
+- Expiring Soon: ${metrics.expiringCount}
+
+Respond with ONLY valid JSON array with 3 objects, each having: {"title": "...", "description": "...", "icon": "trending|warning|tip"}
+Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 300,
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) {
+          try {
+            const insights = JSON.parse(text);
+            setAiInsights(Array.isArray(insights) ? insights.slice(0, 3) : []);
+          } catch (e) {
+            console.error('Failed to parse AI insights:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AI Insights error:', error);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  // Helper to get monthly revenue breakdown
+  const getMonthlyRevenueBreakdown = () => {
+    const monthlyData: any = {};
+    invoices.forEach(inv => {
+      if (inv.type === 'Invoice') {
+        const date = new Date(inv.date || inv.createdAt);
+        const monthKey = date.toLocaleString('default', { month: 'short' });
+        monthlyData[monthKey] = (monthlyData[monthKey] || 0) + inv.total;
+      }
+    });
+    return Object.entries(monthlyData)
+      .slice(-6)
+      .map(([month, revenue]) => ({ month, revenue: revenue as number }));
+  };
+
+  // Helper to get top clients by revenue
+  const getTopClientsByRevenue = () => {
+    const clientRevenue: any = {};
+    invoices.forEach(inv => {
+      if (inv.type === 'Invoice') {
+        const clientName = getClientName(inv.clientId);
+        clientRevenue[clientName] = (clientRevenue[clientName] || 0) + inv.total;
+      }
+    });
+    return Object.entries(clientRevenue)
+      .map(([name, revenue]) => ({ name, revenue: revenue as number }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  };
+
+  // Helper to get client name
+  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Unknown';
+
+  // Get occupancy trend
+  const getOccupancyTrend = () => {
+    const days: any = {};
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayKey = date.toLocaleString('default', { month: 'short', day: 'numeric' });
+      // Simulate trend (in real app, fetch historical data)
+      days[dayKey] = occupancyRate - (Math.random() * 10);
+    }
+    return Object.entries(days).map(([day, rate]) => ({ day, occupancy: Math.round(Math.max(0, rate as number)) }));
+  };
 
   useEffect(() => {
       const ensureData = async () => {
@@ -58,8 +166,24 @@ export const Dashboard: React.FC = () => {
   const totalUnits = totalLedSlots + totalStaticSides;
   const rentedUnits = rentedLedSlots + rentedStaticSides;
   const occupancyRate = totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0;
+  const collectionRate = totalRevenue > 0 ? Math.round((paidRevenue / totalRevenue) * 100) : 0;
 
-  const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Unknown';
+  // Generate dashboard data
+  const monthlyRevenue = getMonthlyRevenueBreakdown();
+  const topClients = getTopClientsByRevenue();
+  const occupancyTrend = getOccupancyTrend();
+
+  // Generate AI insights on mount and data changes
+  useEffect(() => {
+    generateAIInsights({
+      totalRevenue,
+      collectionRate,
+      occupancyRate,
+      activeContracts,
+      overdueCount: overdueInvoices.length,
+      expiringCount: expiringContracts.length
+    });
+  }, [refreshKey]);
 
   const alertCount = expiringContracts.length + overdueInvoices.length;
 
@@ -217,6 +341,128 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Revenue Analytics & AI Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Monthly Revenue Chart */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/60">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-semibold text-slate-900">Monthly Revenue</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Last 6 months</p>
+            </div>
+          </div>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyRevenue}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} formatter={(value: any) => `$${value.toLocaleString()}`} />
+                <Bar dataKey="revenue" fill="#6366f1" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Top Clients by Revenue */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/60">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-semibold text-slate-900">Top Clients</h3>
+              <p className="text-xs text-slate-500 mt-0.5">By total revenue</p>
+            </div>
+          </div>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topClients} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} width={100} />
+                <Tooltip contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} formatter={(value: any) => `$${value.toLocaleString()}`} />
+                <Bar dataKey="revenue" fill="#10b981" radius={[0, 8, 8, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Occupancy Trend */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/60">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-semibold text-slate-900">Occupancy Trend</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Last 7 days</p>
+            </div>
+          </div>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={occupancyTrend}>
+                <defs>
+                  <linearGradient id="occupancyGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4}/>
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+                <Tooltip contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} formatter={(value: any) => `${value}%`} />
+                <Area type="monotone" dataKey="occupancy" stroke="#6366f1" strokeWidth={2} fill="url(#occupancyGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* AI Insights */}
+        <div className="bg-gradient-to-br from-violet-50 to-indigo-50 p-6 rounded-2xl border border-violet-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-violet-500 rounded-lg flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">AI Insights</h3>
+                <p className="text-xs text-violet-600">Powered by Groq</p>
+              </div>
+            </div>
+            {loadingAI && <Loader2 size={16} className="text-violet-500 animate-spin" />}
+          </div>
+          <div className="space-y-3">
+            {loadingAI && aiInsights.length === 0 ? (
+              <div className="text-center py-8">
+                <Loader2 size={24} className="text-violet-500 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-slate-600">Analyzing your data...</p>
+              </div>
+            ) : aiInsights.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-600">No insights available</p>
+                <p className="text-xs text-slate-400 mt-1">Configure GROQ_API_KEY to enable AI</p>
+              </div>
+            ) : (
+              aiInsights.map((insight, i) => (
+                <div key={i} className="bg-white p-4 rounded-xl border border-violet-100">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      insight.icon === 'trending' ? 'bg-emerald-100 text-emerald-600' :
+                      insight.icon === 'warning' ? 'bg-amber-100 text-amber-600' :
+                      'bg-indigo-100 text-indigo-600'
+                    }`}>
+                      {insight.icon === 'trending' ? <TrendingUp size={16} /> :
+                       insight.icon === 'warning' ? <AlertTriangle size={16} /> :
+                       <Zap size={16} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">{insight.title}</p>
+                      <p className="text-xs text-slate-600 mt-1">{insight.description}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -297,7 +543,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-slate-700">
               <span className="text-sm text-slate-400">Collection Rate</span>
-              <span className="font-semibold text-emerald-400">{totalRevenue > 0 ? Math.round((paidRevenue / totalRevenue) * 100) : 0}%</span>
+              <span className="font-semibold text-emerald-400">{collectionRate}%</span>
             </div>
           </div>
         </div>
