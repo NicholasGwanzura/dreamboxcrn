@@ -1300,7 +1300,6 @@ export const BillboardList: React.FC = () => {
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-[1.02]">
                             <Save size={18} /> Update Asset
                         </button>
-                        </button>
                     </form>
                 </div>
             </div>
