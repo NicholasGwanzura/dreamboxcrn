@@ -1,6 +1,8 @@
-import React from 'react';
-import { Calendar, Download, X, AlertCircle } from 'lucide-react';
-import { downloadBackup, getBackupStatus } from '../services/notificationService';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Download, X, AlertCircle, Cloud, FileSpreadsheet } from 'lucide-react';
+import { downloadBackup, getBackupStatus, showSuccess, showError } from '../services/notificationService';
+import { getGoogleDriveConfig, backupToGoogleDrive } from '../services/googleDriveService';
+import { downloadExcelBackup } from '../services/excelExportService';
 
 interface FridayReminderModalProps {
   isOpen: boolean;
@@ -8,13 +10,87 @@ interface FridayReminderModalProps {
 }
 
 export const FridayReminderModal: React.FC<FridayReminderModalProps> = ({ isOpen, onClose }) => {
+  const [isGoogleDriveConnected, setIsGoogleDriveConnected] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupType, setBackupType] = useState<'local' | 'drive' | 'excel' | null>(null);
+
+  useEffect(() => {
+    const config = getGoogleDriveConfig();
+    setIsGoogleDriveConnected(config.isConnected);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const backupStatus = getBackupStatus();
 
-  const handleBackupNow = () => {
-    downloadBackup();
-    onClose();
+  const handleLocalBackup = async () => {
+    setBackupType('local');
+    setIsBackingUp(true);
+    try {
+      downloadBackup();
+      showSuccess('Local backup downloaded successfully!');
+    } finally {
+      setIsBackingUp(false);
+      setBackupType(null);
+      onClose();
+    }
+  };
+
+  const handleExcelBackup = async () => {
+    setBackupType('excel');
+    setIsBackingUp(true);
+    try {
+      // downloadExcelBackup will fetch data internally from localStorage
+      await downloadExcelBackup();
+      showSuccess('Excel backup downloaded successfully!');
+    } catch (error) {
+      showError('Failed to create Excel backup');
+      console.error('Excel backup error:', error);
+    } finally {
+      setIsBackingUp(false);
+      setBackupType(null);
+      onClose();
+    }
+  };
+
+  const handleGoogleDriveBackup = async () => {
+    setBackupType('drive');
+    setIsBackingUp(true);
+    try {
+      // Gather data from localStorage for Google Drive backup
+      const backupData = {
+        version: '2.3.0',
+        timestamp: new Date().toISOString(),
+        data: {
+          billboards: JSON.parse(localStorage.getItem('db_billboards') || '[]'),
+          clients: JSON.parse(localStorage.getItem('db_clients') || '[]'),
+          contracts: JSON.parse(localStorage.getItem('db_contracts') || '[]'),
+          invoices: JSON.parse(localStorage.getItem('db_invoices') || '[]'),
+          expenses: JSON.parse(localStorage.getItem('db_expenses') || '[]'),
+          users: JSON.parse(localStorage.getItem('db_users') || '[]'),
+          tasks: JSON.parse(localStorage.getItem('db_tasks') || '[]'),
+          maintenance_logs: JSON.parse(localStorage.getItem('db_maintenance_logs') || '[]'),
+          outsourced: JSON.parse(localStorage.getItem('db_outsourced') || '[]'),
+          printing: JSON.parse(localStorage.getItem('db_printing') || '[]'),
+          audit_logs: JSON.parse(localStorage.getItem('db_logs') || '[]'),
+          company_profile: JSON.parse(localStorage.getItem('db_company_profile') || '{}')
+        }
+      };
+
+      const result = await backupToGoogleDrive(backupData, true);
+      if (result.success) {
+        showSuccess('Backup uploaded to Google Drive successfully!');
+      } else {
+        showError(result.error || 'Failed to upload backup to Google Drive');
+      }
+    } catch (error) {
+      showError('Failed to upload backup to Google Drive');
+      console.error('Google Drive backup error:', error);
+    } finally {
+      setIsBackingUp(false);
+      setBackupType(null);
+      onClose();
+    }
   };
 
   return (
@@ -66,14 +142,38 @@ export const FridayReminderModal: React.FC<FridayReminderModalProps> = ({ isOpen
             backup every Friday to keep your billboards, clients, contracts, and financial records safe.
           </p>
 
-          <div className="flex gap-3">
-            <button
-              onClick={handleBackupNow}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:from-indigo-700 hover:to-violet-700 transition-all shadow-lg shadow-indigo-500/20"
-            >
-              <Download className="w-5 h-5" />
-              Backup Now
-            </button>
+          <div className="flex flex-col gap-3">
+            {/* Google Drive Backup - Show if connected */}
+            {isGoogleDriveConnected && (
+              <button
+                onClick={handleGoogleDriveBackup}
+                disabled={isBackingUp}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white px-4 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+              >
+                <Cloud className="w-5 h-5" />
+                {isBackingUp && backupType === 'drive' ? 'Uploading...' : 'Backup to Google Drive'}
+              </button>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleLocalBackup}
+                disabled={isBackingUp}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:from-indigo-700 hover:to-violet-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+              >
+                <Download className="w-5 h-5" />
+                {isBackingUp && backupType === 'local' ? 'Downloading...' : 'Download JSON'}
+              </button>
+              <button
+                onClick={handleExcelBackup}
+                disabled={isBackingUp}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-3 rounded-xl font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+              >
+                <FileSpreadsheet className="w-5 h-5" />
+                {isBackingUp && backupType === 'excel' ? 'Exporting...' : 'Download Excel'}
+              </button>
+            </div>
+
             <button
               onClick={onClose}
               className="px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
@@ -86,7 +186,9 @@ export const FridayReminderModal: React.FC<FridayReminderModalProps> = ({ isOpen
         {/* Footer Tip */}
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
           <p className="text-xs text-slate-500 text-center">
-            💡 Tip: You can also access backups from Settings → Data Management
+            💡 Tip: {isGoogleDriveConnected 
+              ? 'Google Drive is connected — your backups can be saved to the cloud!'
+              : 'Connect Google Drive in Settings for automatic cloud backups'}
           </p>
         </div>
       </div>

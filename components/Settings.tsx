@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getUsers, addUser, updateUser, deleteUser, getAuditLogs, getAuditLogsAsync, updateAuditLog, deleteAuditLog, clearAuditLogs, getCompanyLogo, setCompanyLogo, resetCompanyLogo, getCompanyProfile, createCompanyProfile, updateCompanyProfile, resetCompanyProfile, RELEASE_NOTES, resetSystemData, createSystemBackup, restoreSystemBackup, getLastManualBackupDate, getAutoBackupStatus, getStorageUsage, simulateCloudSync, getLastCloudBackupDate, triggerFullSync, verifyDataIntegrity, syncToSupabase } from '../services/mockData';
 import { generateAppFeaturesPDF, generateUserManualPDF } from '../services/pdfGenerator';
-import { Shield, Building, ScrollText, Download, Plus, X, Save, Phone, MapPin, Edit2, Trash2, AlertTriangle, Cloud, Upload, RefreshCw, Database, Clock, HardDrive, Sparkles, Loader2, CheckCircle, FileText, ChevronRight, Server, Wifi, Activity, Lock, Copy, FileCheck, Layers, Cpu, Code2, UserCheck, Users, Mail } from 'lucide-react';
+import { Shield, Building, ScrollText, Download, Plus, X, Save, Phone, MapPin, Edit2, Trash2, AlertTriangle, Cloud, Upload, RefreshCw, Database, Clock, HardDrive, Sparkles, Loader2, CheckCircle, FileText, ChevronRight, Server, Wifi, Activity, Lock, Copy, FileCheck, Layers, Cpu, Code2, UserCheck, Users, Mail, FileSpreadsheet, Link, Unlink } from 'lucide-react';
 import { User as UserType, CompanyProfile, AuditLogEntry } from '../types';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../services/supabaseClient';
 import { UserManagement } from './UserManagement';
+import { downloadExcelBackup } from '../services/excelExportService';
+import { getGoogleDriveConfig, initiateGoogleAuth, disconnectGoogleDrive, setGoogleClientId, getGoogleClientId, setGoogleAutoBackup, backupToGoogleDrive } from '../services/googleDriveService';
+import { showSuccess, showError } from '../services/notificationService';
 
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false, placeholder = "", disabled = false }: any) => (
@@ -192,6 +195,12 @@ export const Settings: React.FC = () => {
   const [auditLogToDelete, setAuditLogToDelete] = useState<AuditLogEntry | null>(null);
   const [isClearingAuditLogs, setIsClearingAuditLogs] = useState(false);
   const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+
+  // Google Drive State
+  const [googleDriveConfig, setGoogleDriveConfig] = useState(getGoogleDriveConfig());
+  const [googleClientId, setGoogleClientIdState] = useState(getGoogleClientId() || '');
+  const [isBackingUpToDrive, setIsBackingUpToDrive] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   // Pending Approval State
   const [approvalUser, setApprovalUser] = useState<UserType | null>(null);
@@ -438,6 +447,95 @@ export const Settings: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     setBackupStatus(prev => ({ ...prev, manual: getLastManualBackupDate() }));
+    showSuccess('JSON backup downloaded');
+  };
+
+  const handleExcelBackup = async () => {
+    setIsExportingExcel(true);
+    try {
+      const success = await downloadExcelBackup();
+      if (success) {
+        showSuccess('Excel backup downloaded');
+      } else {
+        showError('Failed to create Excel backup');
+      }
+    } catch (error) {
+      showError('Excel export failed');
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleConnectGoogleDrive = () => {
+    if (!googleClientId) {
+      showError('Please enter your Google Client ID first');
+      return;
+    }
+    setGoogleClientId(googleClientId);
+    
+    // Listen for auth completion from popup
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin && event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        setGoogleDriveConfig(getGoogleDriveConfig());
+        showSuccess('Connected to Google Drive!');
+        window.removeEventListener('message', handleMessage);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    
+    try {
+      initiateGoogleAuth();
+    } catch (error: any) {
+      showError(error.message || 'Failed to connect');
+    }
+  };
+
+  const handleDisconnectGoogleDrive = () => {
+    disconnectGoogleDrive();
+    setGoogleDriveConfig(getGoogleDriveConfig());
+    showSuccess('Disconnected from Google Drive');
+  };
+
+  const handleBackupToGoogleDrive = async () => {
+    setIsBackingUpToDrive(true);
+    try {
+      const backupData = {
+        version: '2.3.0',
+        backupType: 'google-drive',
+        timestamp: new Date().toISOString(),
+        data: {
+          billboards: JSON.parse(localStorage.getItem('db_billboards') || '[]'),
+          clients: JSON.parse(localStorage.getItem('db_clients') || '[]'),
+          contracts: JSON.parse(localStorage.getItem('db_contracts') || '[]'),
+          invoices: JSON.parse(localStorage.getItem('db_invoices') || '[]'),
+          expenses: JSON.parse(localStorage.getItem('db_expenses') || '[]'),
+          users: JSON.parse(localStorage.getItem('db_users') || '[]'),
+          tasks: JSON.parse(localStorage.getItem('db_tasks') || '[]'),
+          maintenance_logs: JSON.parse(localStorage.getItem('db_maintenance_logs') || '[]'),
+          audit_logs: JSON.parse(localStorage.getItem('db_logs') || '[]'),
+          company_profile: JSON.parse(localStorage.getItem('db_company_profile') || '{}')
+        }
+      };
+      
+      const result = await backupToGoogleDrive(backupData, true);
+      
+      if (result.success) {
+        setGoogleDriveConfig(getGoogleDriveConfig());
+        showSuccess('Backup uploaded to Google Drive!');
+      } else {
+        showError(result.error || 'Backup failed');
+      }
+    } catch (error: any) {
+      showError(error.message || 'Backup to Google Drive failed');
+    } finally {
+      setIsBackingUpToDrive(false);
+    }
+  };
+
+  const handleToggleAutoBackup = (enabled: boolean) => {
+    setGoogleAutoBackup(enabled);
+    setGoogleDriveConfig(prev => ({ ...prev, autoBackupEnabled: enabled }));
+    showSuccess(enabled ? 'Auto-backup enabled' : 'Auto-backup disabled');
   };
 
   const handleCloudSync = async () => {
@@ -445,10 +543,10 @@ export const Settings: React.FC = () => {
           setIsSyncing(true);
           const timestamp = await simulateCloudSync();
           setBackupStatus(prev => ({ ...prev, cloud: timestamp }));
-          alert("Backup successfully synced to Cloud Storage.");
+          showSuccess("Cloud sync completed");
       } catch (error) {
           console.error("Sync error", error);
-          alert("Cloud sync failed. Please check your connection.");
+          showError("Cloud sync failed");
       } finally {
           setIsSyncing(false);
       }
@@ -718,19 +816,104 @@ export const Settings: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
+                        {/* Google Drive Integration */}
+                        <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 shadow-sm">
+                            <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+                                <svg className="w-4 h-4" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                                    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                                    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                                    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                                    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                                    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                                </svg>
+                                Google Drive
+                            </h4>
+                            <p className="text-xs text-slate-500 mb-4">Connect to backup automatically every Friday</p>
+                            
+                            {!googleDriveConfig.isConnected ? (
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Google OAuth Client ID"
+                                        value={googleClientId}
+                                        onChange={(e) => setGoogleClientIdState(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                    <p className="text-[10px] text-slate-400">Get your Client ID from Google Cloud Console → APIs & Services → Credentials</p>
+                                    <button 
+                                        onClick={handleConnectGoogleDrive} 
+                                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Link size={16}/> Connect Google Drive
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200">
+                                        {googleDriveConfig.userInfo?.picture && (
+                                            <img src={googleDriveConfig.userInfo.picture} alt="" className="w-8 h-8 rounded-full"/>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-slate-800 truncate">{googleDriveConfig.userInfo?.name}</p>
+                                            <p className="text-xs text-slate-500 truncate">{googleDriveConfig.userInfo?.email}</p>
+                                        </div>
+                                        <button onClick={handleDisconnectGoogleDrive} className="text-red-500 hover:text-red-700">
+                                            <Unlink size={16}/>
+                                        </button>
+                                    </div>
+                                    {googleDriveConfig.lastBackup && (
+                                        <p className="text-xs text-slate-500">Last backup: {new Date(googleDriveConfig.lastBackup).toLocaleString()}</p>
+                                    )}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-slate-600">Auto-backup on Fridays</span>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={googleDriveConfig.autoBackupEnabled}
+                                                onChange={(e) => handleToggleAutoBackup(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                        </label>
+                                    </div>
+                                    <button 
+                                        onClick={handleBackupToGoogleDrive} 
+                                        disabled={isBackingUpToDrive}
+                                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isBackingUpToDrive ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
+                                        {isBackingUpToDrive ? 'Uploading...' : 'Backup to Drive Now'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                             <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><Cloud size={16}/> Cloud Backup</h4>
-                             <p className="text-xs text-slate-500 mb-4">Sync current state to Google Drive.</p>
+                             <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><Cloud size={16}/> Supabase Sync</h4>
+                             <p className="text-xs text-slate-500 mb-4">Sync current state to Supabase database.</p>
                              <button onClick={handleCloudSync} disabled={isSyncing} className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
-                                 {isSyncing ? <Loader2 size={16} className="animate-spin text-indigo-500"/> : <Upload size={16} className="text-indigo-500"/>} 
-                                 {isSyncing ? 'Syncing...' : 'Sync to Google Drive'}
+                                 {isSyncing ? <Loader2 size={16} className="animate-spin text-indigo-500"/> : <RefreshCw size={16} className="text-indigo-500"/>} 
+                                 {isSyncing ? 'Syncing...' : 'Sync to Supabase'}
                              </button>
                         </div>
 
                         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                             <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><Download size={16}/> Manual Backup</h4>
-                             <p className="text-xs text-slate-500 mb-4">Download a complete JSON snapshot.</p>
-                             <button onClick={handleDownloadBackup} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider transition-colors shadow-lg shadow-indigo-500/30">Download Backup File</button>
+                             <h4 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><Download size={16}/> Download Backup</h4>
+                             <p className="text-xs text-slate-500 mb-4">Export your data in JSON or Excel format.</p>
+                             <div className="flex gap-2">
+                                 <button onClick={handleDownloadBackup} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider transition-colors shadow-lg shadow-indigo-500/30">
+                                     JSON
+                                 </button>
+                                 <button 
+                                     onClick={handleExcelBackup} 
+                                     disabled={isExportingExcel}
+                                     className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold uppercase tracking-wider transition-colors shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 disabled:opacity-50"
+                                 >
+                                     {isExportingExcel ? <Loader2 size={16} className="animate-spin"/> : <FileSpreadsheet size={16}/>}
+                                     Excel
+                                 </button>
+                             </div>
                         </div>
                         
                         <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">

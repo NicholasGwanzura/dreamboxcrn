@@ -1,7 +1,7 @@
 {
   "name": "Dreambox Deluxe",
-  "version": "2.2.0",
-  "description": "Premium billboard rental management system featuring inventory tracking, financial operations, and real-time analytics.",
+  "version": "2.3.0",
+  "description": "Premium billboard rental management system featuring inventory tracking, financial operations, real-time analytics, Google Drive backup integration, and Excel export capabilities.",
   "requestFramePermissions": [
     "geolocation"
   ]

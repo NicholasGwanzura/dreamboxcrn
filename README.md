@@ -4,7 +4,7 @@
 
 **Premium Billboard Rental Management System**
 
-Version 2.2.0 | Production Release
+Version 2.3.0 | Production Release
 
 </div>
 
@@ -27,6 +27,8 @@ Dreambox Deluxe is a comprehensive billboard rental management platform featurin
 - **Real-time Sync** - Supabase integration with automatic cloud backup
 - **Weekly Backups** - Automated Friday backup reminders with downloadable exports
 - **Toast Notifications** - Visual feedback on all save operations
+- **Google Drive Integration** - Connect and backup to Google Drive cloud storage
+- **Excel Export** - Download backups as formatted Excel workbooks
 
 ## 🚀 Getting Started
 
@@ -53,6 +55,41 @@ Dreambox Deluxe is a comprehensive billboard rental management platform featurin
    ```
 
 ## 📦 Release Notes
+
+### v2.3.0 - Google Drive & Excel Export (January 21, 2026)
+**☁️ Cloud Backup & Excel Export Integration**
+
+#### Google Drive Integration
+- ✅ OAuth 2.0 authentication flow with Google
+- ✅ Connect/disconnect Google Drive from Settings
+- ✅ Manual backup to Google Drive
+- ✅ Auto-backup toggle for weekly cloud backups
+- ✅ Creates dedicated "DreamboxDeluxe_Backups" folder
+- ✅ User info display when connected
+
+#### Excel Export
+- ✅ Full system backup as Excel workbook (.xlsx)
+- ✅ Multiple sheets: Billboards, Clients, Contracts, Invoices, Expenses, Tasks, Maintenance, Users, Audit Logs
+- ✅ Summary sheet with counts and backup timestamp
+- ✅ Available from Settings and Friday reminder modal
+
+#### Enhanced Friday Reminder
+- ✅ Three backup options: Google Drive, JSON, Excel
+- ✅ Shows Google Drive status in reminder
+- ✅ Loading states for all backup operations
+
+---
+
+### v2.2.1 - Password Reset Flow (January 21, 2026)
+**🔐 Complete Password Recovery**
+
+- ✅ New `/reset-password` page to handle email reset links
+- ✅ Automatic detection of Supabase recovery tokens
+- ✅ New password form with confirmation
+- ✅ Session validation and error handling
+- ✅ Auto-redirect to login after successful reset
+
+---
 
 ### v2.2.0 - Backup & Notifications (January 21, 2026)
 **💾 Data Protection & User Feedback**

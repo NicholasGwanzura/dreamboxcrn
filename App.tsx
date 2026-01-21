@@ -16,6 +16,8 @@ import { Maintenance } from './components/Maintenance';
 import { Auth } from './components/Auth';
 import { ClientPortal } from './components/ClientPortal';
 import { PublicView } from './components/PublicView';
+import { ResetPassword } from './components/ResetPassword';
+import { GoogleCallback } from './components/GoogleCallback';
 import { ToastContainer } from './components/ToastContainer';
 import { FridayReminderModal } from './components/FridayReminderModal';
 import { getCurrentUser, onAuthStateChange, isSupabaseConfigured } from './services/authService';
@@ -78,6 +80,8 @@ const App: React.FC = () => {
   const [portalMode, setPortalMode] = useState<{active: boolean, clientId: string | null}>({ active: false, clientId: null });
   const [publicMode, setPublicMode] = useState<{active: boolean, type: 'billboard' | 'map', id?: string}>({ active: false, type: 'map' });
   const [showFridayReminder, setShowFridayReminder] = useState(false);
+  const [resetPasswordMode, setResetPasswordMode] = useState(false);
+  const [googleCallbackMode, setGoogleCallbackMode] = useState(false);
 
   // Initialize auth state on mount
   useEffect(() => {
@@ -139,6 +143,20 @@ const App: React.FC = () => {
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash;
+      
+      // Check for Google Drive OAuth callback
+      if (window.location.pathname === '/google-callback') {
+          setGoogleCallbackMode(true);
+          return;
+      }
+      
+      // Check for Password Reset (from Supabase email link)
+      // Supabase uses hash fragments like #access_token=...&type=recovery
+      if (window.location.pathname === '/reset-password' || hash.includes('type=recovery')) {
+          setResetPasswordMode(true);
+          return;
+      }
       
       // Check for Client Portal
       const isPortal = params.get('portal') === 'true';
@@ -202,6 +220,30 @@ const App: React.FC = () => {
               <PublicView type={publicMode.type} billboardId={publicMode.id} />
           </ErrorBoundary>
       )
+  }
+
+  // Google Drive OAuth Callback (No Auth Required)
+  if (googleCallbackMode) {
+      return (
+          <ErrorBoundary>
+              <GoogleCallback onComplete={() => {
+                  setGoogleCallbackMode(false);
+                  window.history.replaceState(null, '', '/');
+              }} />
+          </ErrorBoundary>
+      );
+  }
+
+  // Password Reset Routing (No Auth Required)
+  if (resetPasswordMode) {
+      return (
+          <ErrorBoundary>
+              <ResetPassword onComplete={() => {
+                  setResetPasswordMode(false);
+                  window.history.replaceState(null, '', '/');
+              }} />
+          </ErrorBoundary>
+      );
   }
 
   // Client Portal Routing (No Auth Required)
