@@ -1,7 +1,7 @@
-// AI Service for Gemini-powered billboard suggestions
-// Uses Google Gemini API for intelligent field suggestions
+// AI Service for Groq-powered billboard suggestions
+// Uses Groq API with Llama 3.1 for blazing fast AI responses
 
-const GEMINI_API_KEY = (window as any).process?.env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = (window as any).process?.env?.GROQ_API_KEY || process.env.GROQ_API_KEY;
 
 interface AIGenerationResult {
   success: boolean;
@@ -9,37 +9,39 @@ interface AIGenerationResult {
   error?: string;
 }
 
-// Generic function to call Gemini API
-async function callGemini(prompt: string): Promise<AIGenerationResult> {
-  if (!GEMINI_API_KEY) {
-    console.warn('[AI Service] No Gemini API key configured');
-    return { success: false, error: 'AI service not configured. Please add GEMINI_API_KEY to environment.' };
+// Generic function to call Groq API (OpenAI-compatible format)
+async function callGroq(prompt: string): Promise<AIGenerationResult> {
+  if (!GROQ_API_KEY) {
+    console.warn('[AI Service] No Groq API key configured');
+    return { success: false, error: 'AI service not configured. Please add GROQ_API_KEY to environment.' };
   }
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 500,
-          }
+          model: 'llama-3.1-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 500,
         })
       }
     );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('[AI Service] API error:', errorData);
-      return { success: false, error: `API error: ${response.status}` };
+      console.error('[AI Service] Groq API error:', errorData);
+      return { success: false, error: `API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}` };
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = data.choices?.[0]?.message?.content;
     
     if (!text) {
       return { success: false, error: 'No response from AI' };
@@ -47,8 +49,8 @@ async function callGemini(prompt: string): Promise<AIGenerationResult> {
 
     return { success: true, data: text };
   } catch (error: any) {
-    console.error('[AI Service] Request failed:', error);
-    return { success: false, error: error.message || 'Failed to connect to AI service' };
+    console.error('[AI Service] Groq request failed:', error);
+    return { success: false, error: error.message || 'Failed to connect to Groq AI service' };
   }
 }
 
@@ -70,7 +72,7 @@ Write 2-3 sentences describing:
 
 Keep it concise and professional. Don't use bullet points, write in paragraph form. Maximum 100 words.`;
 
-  return callGemini(prompt);
+  return callGroq(prompt);
 }
 
 // Estimate daily traffic based on location
@@ -94,7 +96,7 @@ Known traffic patterns in Zimbabwe:
 
 Respond with ONLY a number (no commas, no text). Example: 45000`;
 
-  const result = await callGemini(prompt);
+  const result = await callGroq(prompt);
   
   if (result.success && result.data) {
     // Extract number from response
@@ -133,7 +135,7 @@ Example: -17.8292,31.0522
 
 If the specific location is mentioned (e.g., "corner of First Street"), adjust the base coordinates slightly to approximate that location within the town.`;
 
-  const result = await callGemini(prompt);
+  const result = await callGroq(prompt);
   
   if (result.success && result.data) {
     // Parse coordinates from response
@@ -193,5 +195,5 @@ export async function generateAllSuggestions(
 
 // Check if AI service is available
 export function isAIServiceAvailable(): boolean {
-  return !!GEMINI_API_KEY;
+  return !!GROQ_API_KEY;
 }

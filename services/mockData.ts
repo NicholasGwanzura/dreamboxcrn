@@ -916,10 +916,11 @@ export const RELEASE_NOTES = [
         date: 'January 21, 2026',
         title: 'AI-Powered Billboard Intelligence',
         features: [
-            'AI Visibility Notes: Generate professional visibility analysis with one click using Google Gemini.',
+            'AI Visibility Notes: Generate professional visibility analysis with one click using Groq AI.',
             'Traffic Estimation: AI estimates daily traffic based on Zimbabwe location data.',
             'Smart Coordinates: Auto-suggest GPS coordinates from town and location names.',
             'Auto-fill All: Single button to populate visibility, traffic, and coordinates at once.',
+            'Powered by Llama 3.1 70B via Groq - blazing fast AI responses.',
             'Version: 2.2.0 - The AI Intelligence Update.'
         ]
     },
