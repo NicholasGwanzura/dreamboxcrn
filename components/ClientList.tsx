@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Client } from '../types';
 import { getClients, addClient, deleteClient, updateClient, getNextBillingDetails, subscribe } from '../services/mockData';
 import { generateClientDirectoryPDF } from '../services/pdfGenerator';
-import { Mail, Phone, MoreHorizontal, User, Plus, X, Save, Search, Trash2, AlertTriangle, Calendar, Clock, Edit2, CreditCard, Share2, Download } from 'lucide-react';
+import { Mail, Phone, MoreHorizontal, User, Plus, X, Save, Search, Trash2, AlertTriangle, Calendar, Clock, Edit2, CreditCard, Share2, Download, FileText } from 'lucide-react';
 
 const MinimalInput = ({ label, value, onChange, type = "text", placeholder, required = false, max, min, step }: any) => (
   <div className="group relative">
@@ -18,7 +18,7 @@ export const ClientList: React.FC = () => {
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   
-  const [newClient, setNewClient] = useState<Partial<Client>>({ companyName: '', contactPerson: '', email: '', phone: '', status: 'Active', billingDay: undefined });
+  const [newClient, setNewClient] = useState<Partial<Client>>({ companyName: '', contactPerson: '', email: '', phone: '', status: 'Active', billingDay: undefined, notes: '' });
 
   // Real-time Subscription
   useEffect(() => {
@@ -37,9 +37,10 @@ export const ClientList: React.FC = () => {
         email: newClient.email || '', 
         phone: newClient.phone || '', 
         status: 'Active',
-        billingDay: newClient.billingDay 
+        billingDay: newClient.billingDay,
+        notes: newClient.notes 
     };
-    addClient(client); setIsAddModalOpen(false); setNewClient({ companyName: '', contactPerson: '', email: '', phone: '', status: 'Active', billingDay: undefined });
+    addClient(client); setIsAddModalOpen(false); setNewClient({ companyName: '', contactPerson: '', email: '', phone: '', status: 'Active', billingDay: undefined, notes: '' });
   };
   
   const handleUpdateClient = (e: React.FormEvent) => {
@@ -94,6 +95,16 @@ export const ClientList: React.FC = () => {
                         <h3 className="text-xl font-bold text-slate-900 mb-1">{client.companyName}</h3><div className="flex items-center gap-2 text-sm text-slate-500 mb-6 font-medium"><User size={14} className="text-indigo-500"/> {client.contactPerson}</div>
                         <div className="space-y-3 border-t border-slate-50 pt-4 mb-4"><div className="flex items-center gap-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors"><Mail size={16} className="text-slate-400" /> {client.email}</div><div className="flex items-center gap-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors"><Phone size={16} className="text-slate-400" /> {client.phone}</div></div>
                         
+                        {client.notes && (
+                            <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 mb-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FileText size={14} className="text-amber-500" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-500">Notes</span>
+                                </div>
+                                <p className="text-xs text-amber-800 leading-relaxed line-clamp-2">{client.notes}</p>
+                            </div>
+                        )}
+                        
                         {billingInfo ? (
                              <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100 mb-4">
                                  <div className="flex items-center justify-between mb-1">
@@ -136,6 +147,10 @@ export const ClientList: React.FC = () => {
                             <MinimalInput label="Phone Number" type="tel" value={newClient.phone} onChange={(e: any) => setNewClient({...newClient, phone: e.target.value})} />
                             <MinimalInput label="Billing Day (1-31)" type="number" min={1} max={31} value={newClient.billingDay || ''} onChange={(e: any) => setNewClient({...newClient, billingDay: e.target.value ? Number(e.target.value) : undefined})} />
                         </div>
+                        <div className="group relative">
+                            <textarea value={newClient.notes || ''} onChange={(e: any) => setNewClient({...newClient, notes: e.target.value})} placeholder=" " rows={3} className="peer w-full px-0 py-2.5 border-b border-slate-200 bg-transparent text-slate-800 focus:border-slate-800 focus:ring-0 outline-none transition-all font-medium placeholder-transparent resize-none" />
+                            <label className="absolute left-0 -top-2.5 text-xs text-slate-400 font-medium transition-all peer-placeholder-shown:text-sm peer-placeholder-shown:text-slate-400 peer-placeholder-shown:top-2.5 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-slate-800 uppercase tracking-wide">Internal Notes (Optional)</label>
+                        </div>
                         <button type="submit" className="w-full px-4 py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-105"><Save size={18} /> Save Client</button>
                     </form>
                 </div>
@@ -167,6 +182,13 @@ export const ClientList: React.FC = () => {
                             <div className="grid grid-cols-1 gap-6">
                                 <MinimalInput label="Preferred Billing Day (1-31)" type="number" min={1} max={31} value={editingClient.billingDay || ''} onChange={(e: any) => setEditingClient({...editingClient, billingDay: e.target.value ? Number(e.target.value) : undefined})} placeholder="Default: Contract Start Date" />
                                 <p className="text-xs text-slate-400 leading-relaxed">Setting a fixed billing day (e.g., 25th) will consolidate all invoices for this client to be generated on this day of the month, overriding individual contract start dates.</p>
+                            </div>
+                        </div>
+                        <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 space-y-4">
+                            <div className="flex items-center gap-2 mb-2"><FileText className="text-amber-500" size={18} /><h4 className="text-xs font-bold uppercase tracking-wider text-amber-600">Client Notes</h4></div>
+                            <div className="grid grid-cols-1 gap-4">
+                                <textarea value={editingClient.notes || ''} onChange={(e: any) => setEditingClient({...editingClient, notes: e.target.value})} placeholder="Add internal notes about this client..." rows={4} className="w-full px-4 py-3 border border-amber-200 bg-white rounded-xl text-slate-800 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 outline-none transition-all font-medium resize-none text-sm" />
+                                <p className="text-xs text-amber-500 leading-relaxed">Internal notes are only visible to staff and will not be shared with the client.</p>
                             </div>
                         </div>
                         <button type="submit" className="w-full px-4 py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all hover:scale-105"><Save size={18} /> Update Client</button>

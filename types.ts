@@ -72,6 +72,7 @@ export interface Client {
   phone: string;
   status: 'Active' | 'Inactive';
   billingDay?: number; // Preferred day of month for payment
+  notes?: string; // Internal notes about the client
 }
 
 export interface Contract {

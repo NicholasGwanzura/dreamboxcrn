@@ -1,12 +1,7 @@
 import { supabase, isSupabaseConfigured as checkSupabaseConfigured } from './supabaseClient';
 import { User } from '../types';
 
-// Fallback mock data for local development without Supabase
-import { getUsers, addUser, findUser, fetchLatestUsers, pullAllDataFromSupabase } from './mockData';
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Try to fetch users through a secured Supabase Edge Function that holds the service role key.
+// Production mode: Only Supabase functions are used for data operations\nimport { getUsers, pullAllDataFromSupabase } from './mockData';\n\n// Try to fetch users through a secured Supabase Edge Function that holds the service role key.
 const fetchUsersViaEdge = async (): Promise<User[]> => {
     console.log("📡 Calling admin-list-users Edge Function...");
     const { data, error } = await supabase.functions.invoke('admin-list-users');
@@ -88,22 +83,8 @@ export const isSupabaseConfigured = checkSupabaseConfigured;
  */
 export const register = async (firstName: string, lastName: string, email: string, password: string): Promise<any> => {
     if (!isSupabaseConfigured()) {
-        // Fallback to mock implementation
-        const existing = findUser(email);
-        if (existing) {
-            throw new Error("Email/Username already registered");
-        }
-        const newUser: User = {
-            id: Date.now().toString(),
-            firstName,
-            lastName,
-            email,
-            password,
-            role: 'Staff',
-            status: 'Pending'
-        };
-        addUser(newUser);
-        return newUser;
+        // Production requires Supabase - no mock fallback
+        throw new Error("Registration service not configured. Please contact your administrator.");
     }
 
     try {
@@ -130,66 +111,8 @@ export const register = async (firstName: string, lastName: string, email: strin
  */
 export const login = async (identifier: string, password: string): Promise<User | null> => {
     if (!isSupabaseConfigured()) {
-        // Fallback to mock implementation
-        const remoteUsers = await fetchLatestUsers();
-        await delay(800);
-
-        // Developer backdoors (keep for development)
-        if ((identifier.toLowerCase() === 'dev' || identifier.toLowerCase() === 'dev@dreambox.com') && password === 'dev123') {
-            const devUser: User = {
-                id: 'dev-admin-001',
-                firstName: 'System',
-                lastName: 'Developer',
-                email: 'dev@dreambox.com',
-                username: 'dev',
-                role: 'Admin',
-                status: 'Active',
-                password: 'dev123'
-            };
-            
-            const existing = findUser('dev');
-            if (!existing) {
-                addUser(devUser);
-            }
-
-            try {
-                localStorage.setItem('billboard_user', JSON.stringify(devUser));
-            } catch (e) {
-                console.warn("Storage Full during login");
-                localStorage.removeItem('db_logs');
-                localStorage.removeItem('db_auto_backup_data');
-                try {
-                    localStorage.setItem('billboard_user', JSON.stringify(devUser));
-                } catch (finalError) {
-                    throw new Error("Storage Critical: Cannot save login session.");
-                }
-            }
-            return devUser;
-        }
-
-        const userList = remoteUsers || getUsers();
-        const term = identifier.toLowerCase().trim();
-        const user = userList.find(u => u.email.toLowerCase() === term || (u.username && u.username.toLowerCase() === term));
-        
-        if (user && user.password === password) {
-            if (user.status !== 'Active') {
-                throw new Error(user.status === 'Pending' ? "Account awaiting Admin approval." : "Account access restricted.");
-            }
-            try {
-                localStorage.setItem('billboard_user', JSON.stringify(user));
-            } catch (e) {
-                console.warn("Storage Full during login");
-                localStorage.removeItem('db_logs');
-                localStorage.removeItem('db_auto_backup_data');
-                try {
-                    localStorage.setItem('billboard_user', JSON.stringify(user));
-                } catch (finalError) {
-                    throw new Error("Storage Critical: Cannot save login session.");
-                }
-            }
-            return user;
-        }
-        return null;
+        // Production requires Supabase - no mock fallback
+        throw new Error("Authentication service not configured. Please contact your administrator.");
     }
 
     try {
@@ -260,10 +183,12 @@ export const logout = async (): Promise<void> => {
  * Get current user from session
  */
 export const getCurrentUser = async (): Promise<User | null> => {
+    // Check localStorage for cached session first
+    const stored = localStorage.getItem('billboard_user');
+    const cachedUser = stored ? JSON.parse(stored) : null;
+    
     if (!isSupabaseConfigured()) {
-        // Fallback to mock - check localStorage
-        const stored = localStorage.getItem('billboard_user');
-        return stored ? JSON.parse(stored) : null;
+        return cachedUser;
     }
 
     try {
@@ -292,13 +217,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
  */
 export const resetPassword = async (email: string): Promise<void> => {
     if (!isSupabaseConfigured()) {
-        // Fallback to mock implementation
-        await delay(1500);
-        const user = findUser(email);
-        if (!user) {
-            throw new Error("No account found with this email address");
-        }
-        return;
+        throw new Error("Password reset service not configured. Please contact your administrator.");
     }
 
     try {

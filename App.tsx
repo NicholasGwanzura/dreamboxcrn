@@ -16,8 +16,11 @@ import { Maintenance } from './components/Maintenance';
 import { Auth } from './components/Auth';
 import { ClientPortal } from './components/ClientPortal';
 import { PublicView } from './components/PublicView';
+import { ToastContainer } from './components/ToastContainer';
+import { FridayReminderModal } from './components/FridayReminderModal';
 import { getCurrentUser, onAuthStateChange, isSupabaseConfigured } from './services/authService';
 import { pullAllDataFromSupabase } from './services/mockData';
+import { checkFridayReminder } from './services/notificationService';
 import { User } from './types';
 
 
@@ -74,6 +77,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [portalMode, setPortalMode] = useState<{active: boolean, clientId: string | null}>({ active: false, clientId: null });
   const [publicMode, setPublicMode] = useState<{active: boolean, type: 'billboard' | 'map', id?: string}>({ active: false, type: 'map' });
+  const [showFridayReminder, setShowFridayReminder] = useState(false);
 
   // Initialize auth state on mount
   useEffect(() => {
@@ -121,6 +125,17 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  // Check for Friday backup reminder when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      const { shouldRemind } = checkFridayReminder();
+      if (shouldRemind) {
+        // Show reminder after a short delay so it doesn't feel intrusive
+        setTimeout(() => setShowFridayReminder(true), 2000);
+      }
+    }
+  }, [isAuthenticated, isLoading]);
 
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
@@ -216,6 +231,11 @@ const App: React.FC = () => {
         >
           {renderPage()}
         </Layout>
+        <ToastContainer />
+        <FridayReminderModal 
+          isOpen={showFridayReminder} 
+          onClose={() => setShowFridayReminder(false)} 
+        />
     </ErrorBoundary>
   );
 };
