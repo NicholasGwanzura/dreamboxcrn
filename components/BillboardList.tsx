@@ -63,12 +63,15 @@ const getAvailabilityStatus = (billboard: Billboard) => {
         if (sideABooked || sideBBooked) return 'Partial'; // One side available
         return 'Open';
     } else {
-        // LED
+        // LED (Digital)
         const bookedCount = activeContracts.length;
         if (bookedCount >= (billboard.totalSlots || 1)) return 'Booked';
         return 'Open';
     }
 }
+
+// Helper to get display label for billboard type
+const getTypeLabel = (type: string) => type === 'LED' ? 'Digital' : type;
 
 interface BillboardCardProps {
   billboard: Billboard;
@@ -198,7 +201,7 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
 
 export const BillboardList: React.FC = () => {
   const [billboards, setBillboards] = useState<Billboard[]>(getBillboards());
-  const [filter, setFilter] = useState<'All' | 'Static' | 'LED'>('All');
+  const [filter, setFilter] = useState<'All' | 'Digital' | 'Static'>('All');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientView, setIsClientView] = useState(false);
@@ -400,7 +403,7 @@ export const BillboardList: React.FC = () => {
   }, []);
 
   const filteredBillboards = billboards.filter(b => {
-    const matchesFilter = filter === 'All' ? true : b.type === filter;
+    const matchesFilter = filter === 'All' ? true : b.type === (filter === 'Digital' ? 'LED' : filter);
     const matchesSearch = b.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           b.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           b.town.toLowerCase().includes(searchTerm.toLowerCase());
@@ -765,6 +768,18 @@ export const BillboardList: React.FC = () => {
       reader.readAsText(file);
   };
 
+  // Get sorted and grouped billboards
+  const getSortedBillboards = () => {
+    const sorted = [...filteredBillboards].sort((a, b) => a.name.localeCompare(b.name));
+    return sorted;
+  };
+  
+  const sortedBillboards = getSortedBillboards();
+  
+  // Separate into Digital and Static
+  const digitalBillboards = sortedBillboards.filter(b => b.type === 'LED');
+  const staticBillboards = sortedBillboards.filter(b => b.type === 'Static');
+
   return (
     <>
       <div className="space-y-8 relative font-sans h-[calc(100vh-140px)] flex flex-col animate-fade-in">
@@ -797,7 +812,7 @@ export const BillboardList: React.FC = () => {
                     <div className="w-[1px] h-6 bg-slate-200 mx-1"></div>
                     <button onClick={shareMap} className="p-2.5 rounded-full text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 transition-all" title="Share Public Map Link"><Globe size={18}/></button>
                 </div>
-
+ 
                 <button onClick={() => setIsAddModalOpen(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-full text-sm font-bold uppercase tracking-wider hover:bg-slate-800 shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center gap-2"><Plus size={18} /> Add Billboard</button>
              </div>
           </div>
@@ -822,9 +837,20 @@ export const BillboardList: React.FC = () => {
                  </div>
              </div>
         ) : (
-            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-4' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 auto-rows-fr'}`}>
-                {filteredBillboards.map((b, idx) => {
-                    // ... (render billboard cards logic same as before)
+            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-6' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 auto-rows-fr'}`}>
+                {/* Digital Billboards Section */}
+                {filter === 'All' && digitalBillboards.length > 0 && (
+                    <div className="col-span-full">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                                <Zap size={20} className="text-indigo-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">Digital Billboards</h3>
+                            <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold uppercase rounded-full">{digitalBillboards.length}</span>
+                        </div>
+                    </div>
+                )}
+                {digitalBillboards.map((b, idx) => {
                     const status = getAvailabilityStatus(b);
                     const isAvailable = status === 'Open';
                     const isPartial = status === 'Partial';
@@ -834,7 +860,7 @@ export const BillboardList: React.FC = () => {
                     return viewMode === 'list' ? (
                          <div key={b.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-lg transition-all group hover:-translate-y-0.5">
                              <div className="relative">
-                                 <div className="absolute -top-2 -left-2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md z-10 border border-white/20">#{idx + 1}</div>
+                                 <div className="absolute -top-2 -left-2 bg-indigo-900 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md z-10 border border-white/20">#{idx + 1}</div>
                                  <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group-hover:scale-105 transition-transform ${!hasImage ? gradientClass : 'bg-slate-100'}`}>
                                      {hasImage ? (
                                          <img 
@@ -847,7 +873,6 @@ export const BillboardList: React.FC = () => {
                                                 if (parent) {
                                                     parent.classList.remove('bg-slate-100');
                                                     gradientClass.split(' ').forEach(cls => parent.classList.add(cls));
-                                                    // Add placeholder
                                                     const placeholder = document.createElement('div');
                                                     placeholder.className = 'w-full h-full flex items-center justify-center text-white/30';
                                                     placeholder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
@@ -875,7 +900,7 @@ export const BillboardList: React.FC = () => {
                              </div>
                              <div className="flex items-center gap-4 sm:border-l sm:border-slate-100 sm:pl-6 pt-4 sm:pt-0 border-t border-slate-50 sm:border-t-0 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-start">
                                  <div className="flex flex-col items-end mr-2">
-                                     <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1 ${b.type === BillboardType.LED ? 'bg-indigo-50 text-indigo-700' : 'bg-orange-50 text-orange-700'}`}>{b.type}</span>
+                                     <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1 bg-indigo-50 text-indigo-700">Digital</span>
                                      <span className="text-[10px] text-slate-400 font-mono">ID: {b.id.slice(-4)}</span>
                                  </div>
                                  <div className="flex gap-2">
@@ -888,6 +913,88 @@ export const BillboardList: React.FC = () => {
                         <BillboardCard key={b.id} billboard={b} index={idx + 1} onEdit={setEditingBillboard} onDelete={setBillboardToDelete} getClientName={getClientName} onShare={shareBillboard} onViewImage={(url) => setViewImage(url)} />
                     )
                 })}
+                
+                {/* Static Billboards Section */}
+                {filter === 'All' && staticBillboards.length > 0 && (
+                    <div className="col-span-full mt-4">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                                <Layers size={20} className="text-orange-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">Static Billboards</h3>
+                            <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-bold uppercase rounded-full">{staticBillboards.length}</span>
+                        </div>
+                    </div>
+                )}
+                {staticBillboards.map((b, idx) => {
+                    const status = getAvailabilityStatus(b);
+                    const isAvailable = status === 'Open';
+                    const isPartial = status === 'Partial';
+                    const gradientClass = getPlaceholderGradient(b.id);
+                    const hasImage = hasValidImage(b.imageUrl);
+
+                    return viewMode === 'list' ? (
+                         <div key={b.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-lg transition-all group hover:-translate-y-0.5">
+                             <div className="relative">
+                                 <div className="absolute -top-2 -left-2 bg-orange-800 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md z-10 border border-white/20">#{idx + 1}</div>
+                                 <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group-hover:scale-105 transition-transform ${!hasImage ? gradientClass : 'bg-slate-100'}`}>
+                                     {hasImage ? (
+                                         <img 
+                                            src={b.imageUrl} 
+                                            className="w-full h-full object-cover" 
+                                            onError={(e) => { 
+                                                const target = e.target as HTMLImageElement;
+                                                target.style.display = 'none'; 
+                                                const parent = target.parentElement;
+                                                if (parent) {
+                                                    parent.classList.remove('bg-slate-100');
+                                                    gradientClass.split(' ').forEach(cls => parent.classList.add(cls));
+                                                    const placeholder = document.createElement('div');
+                                                    placeholder.className = 'w-full h-full flex items-center justify-center text-white/30';
+                                                    placeholder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+                                                    parent.appendChild(placeholder);
+                                                }
+                                            }}
+                                         />
+                                     ) : ( <div className="w-full h-full flex items-center justify-center text-white/30"><ImageIcon size={28}/></div> )}
+                                 </div>
+                             </div>
+                             <div className="flex-1 min-w-0">
+                                 <div className="flex items-center gap-3 mb-1">
+                                     <h4 className="font-bold text-slate-900 truncate text-lg tracking-tight" title={b.name}>{b.name}</h4>
+                                     <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border shrink-0 ${isAvailable ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : isPartial ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                                         {isAvailable ? 'Open' : isPartial ? '1 Side Open' : 'Booked'}
+                                     </span>
+                                 </div>
+                                 <p className="text-xs text-slate-500 font-medium flex items-center gap-1 truncate mb-2">
+                                     <MapPin size={12} className="shrink-0 text-indigo-500"/> <span className="truncate">{b.location}, {b.town}</span>
+                                 </p>
+                                 <div className="flex gap-4 text-[10px] text-slate-400 font-bold uppercase tracking-wide">
+                                     <span className="flex items-center gap-1"><Maximize2 size={10}/> {b.width}x{b.height}m</span>
+                                     <span className="flex items-center gap-1"><Car size={10}/> {b.dailyTraffic ? (b.dailyTraffic/1000).toFixed(0)+'k' : '-'} Views</span>
+                                 </div>
+                             </div>
+                             <div className="flex items-center gap-4 sm:border-l sm:border-slate-100 sm:pl-6 pt-4 sm:pt-0 border-t border-slate-50 sm:border-t-0 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-start">
+                                 <div className="flex flex-col items-end mr-2">
+                                     <span className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1 bg-orange-50 text-orange-700">Static</span>
+                                     <span className="text-[10px] text-slate-400 font-mono">ID: {b.id.slice(-4)}</span>
+                                 </div>
+                                 <div className="flex gap-2">
+                                     <button onClick={() => setEditingBillboard(b)} className="p-2.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors" title="Edit"><Edit2 size={16}/></button>
+                                     <button onClick={() => setBillboardToDelete(b)} className="p-2.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-50 rounded-xl transition-colors" title="Delete"><Trash2 size={16}/></button>
+                                 </div>
+                             </div>
+                         </div>
+                    ) : (
+                        <BillboardCard key={b.id} billboard={b} index={digitalBillboards.length + idx + 1} onEdit={setEditingBillboard} onDelete={setBillboardToDelete} getClientName={getClientName} onShare={shareBillboard} onViewImage={(url) => setViewImage(url)} />
+                    )
+                })}
+                
+                {sortedBillboards.length === 0 && (
+                    <div className="col-span-full py-12 text-center text-slate-400 italic bg-white rounded-2xl border border-slate-100 border-dashed">
+                        No billboards found matching your criteria.
+                    </div>
+                )}
             </div>
         )}
       </div>
