@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { getContracts, getBillboards, addContract, addInvoice, clients, deleteContract, subscribe, pullAllDataFromSupabase } from '../services/mockData';
+import { getContracts, getBillboards, addContract, addInvoice, clients, deleteContract, subscribe, pullAllDataFromSupabase, updateContract } from '../services/mockData';
 import { generateContractPDF, generateActiveContractsPDF } from '../services/pdfGenerator';
 import { Contract, BillboardType, VAT_RATE, Invoice } from '../types';
-import { FileText, Calendar, Download, Eye, Plus, X, RefreshCw, CheckCircle, Trash2, AlertTriangle, GanttChart, List, Lock } from 'lucide-react';
+import { FileText, Calendar, Download, Eye, Plus, X, RefreshCw, CheckCircle, Trash2, AlertTriangle, GanttChart, List, Lock, Edit2 } from 'lucide-react';
 
 const MinimalInput = ({ label, value, onChange, type = "text", required = false, disabled = false }: any) => {
   const isDate = type === 'date';
@@ -51,6 +51,7 @@ export const Rentals: React.FC = () => {
   const [selectedRental, setSelectedRental] = useState<Contract | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [rentalToDelete, setRentalToDelete] = useState<Contract | null>(null);
+  const [editingRental, setEditingRental] = useState<Contract | null>(null);
   const [isPullingData, setIsPullingData] = useState(false);
 
   // Gantt State
@@ -229,6 +230,14 @@ export const Rentals: React.FC = () => {
       }
   };
 
+  const handleUpdateRental = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(editingRental) {
+          updateContract(editingRental);
+          setEditingRental(null);
+      }
+  };
+
   // --- Gantt Chart Helpers ---
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   
@@ -389,6 +398,9 @@ export const Rentals: React.FC = () => {
                         <button onClick={() => setSelectedRental(contract)} className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-1">
                             <Eye size={14} /> <span className="hidden sm:inline">View</span>
                         </button>
+                        <button onClick={() => setEditingRental(contract)} className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1">
+                            <Edit2 size={14} /> <span className="hidden sm:inline">Edit</span>
+                        </button>
                         <button onClick={() => { const client = getClient(contract.clientId); if(client) generateContractPDF(contract, client, getBillboardName(contract.billboardId)); }} className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1 shadow-lg hover:shadow-slate-500/30">
                             <Download size={14} /> <span className="hidden sm:inline">PDF</span>
                         </button>
@@ -532,6 +544,52 @@ export const Rentals: React.FC = () => {
                  </div>
               </div>
           </div>
+        </div>
+      )}
+
+      {editingRental && (
+        <div className="fixed inset-0 z-[200] overflow-y-auto">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => setEditingRental(null)} />
+            <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                <div className="relative transform overflow-hidden rounded-3xl bg-white text-left shadow-2xl transition-all sm:my-8 w-full max-w-2xl border border-white/20 max-h-[90vh] overflow-y-auto">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/50 sticky top-0 z-10 backdrop-blur-sm">
+                        <h3 className="text-xl font-bold text-slate-900">Edit Rental Agreement</h3>
+                        <button onClick={() => setEditingRental(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} className="text-slate-400" /></button>
+                    </div>
+                    <form onSubmit={handleUpdateRental} className="p-6 sm:p-8 space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <MinimalInput label="Start Date" type="date" value={editingRental.startDate} onChange={(e: any) => setEditingRental({...editingRental, startDate: e.target.value})} required />
+                            <MinimalInput label="End Date" type="date" value={editingRental.endDate} onChange={(e: any) => setEditingRental({...editingRental, endDate: e.target.value})} required />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <MinimalInput label="Monthly Rate ($)" type="number" value={editingRental.monthlyRate} onChange={(e: any) => setEditingRental({...editingRental, monthlyRate: Number(e.target.value)})} />
+                            <MinimalInput label="Installation Cost ($)" type="number" value={editingRental.installationCost} onChange={(e: any) => setEditingRental({...editingRental, installationCost: Number(e.target.value)})} />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <MinimalInput label="Printing Cost ($)" type="number" value={editingRental.printingCost} onChange={(e: any) => setEditingRental({...editingRental, printingCost: Number(e.target.value)})} />
+                            <MinimalSelect label="Status" value={editingRental.status} onChange={(e: any) => setEditingRental({...editingRental, status: e.target.value})} options={[
+                                {value: 'Active', label: 'Active'},
+                                {value: 'Completed', label: 'Completed'},
+                                {value: 'Cancelled', label: 'Cancelled'}
+                            ]} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input type="checkbox" checked={editingRental.hasVat} onChange={e => setEditingRental({...editingRental, hasVat: e.target.checked})} className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"/>
+                            <label className="text-sm font-medium text-slate-600">Include VAT (15%)</label>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Total Contract Value</span>
+                                <span className="font-bold text-slate-900">${editingRental.totalContractValue.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button type="button" onClick={() => setEditingRental(null)} className="flex-1 py-3 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold uppercase text-xs tracking-wider transition-colors">Cancel</button>
+                            <button type="submit" className="flex-1 py-3 text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl font-bold uppercase text-xs tracking-wider transition-colors shadow-lg shadow-indigo-500/30">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
       )}
     </>
