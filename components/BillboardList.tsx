@@ -677,7 +677,8 @@ export const BillboardList: React.FC = () => {
               addBillboard(newBoard);
               importedCount++;
 
-              if (clientName && startDate && endDate) {
+              // Create client if clientName exists (even without dates)
+              if (clientName) {
                   const currentClients = getClients();
                   let client = currentClients.find(c => c.companyName.toLowerCase() === clientName.toLowerCase());
                   const preferredBillingDay = billingDay ? parseInt(billingDay, 10) : undefined;
@@ -696,6 +697,27 @@ export const BillboardList: React.FC = () => {
                       client = newClient;
                   } else if (preferredBillingDay && client.billingDay !== preferredBillingDay) {
                       updateClient({ ...client, billingDay: preferredBillingDay });
+                  }
+              }
+
+              // Create contract only if clientName, startDate, and endDate all exist
+              if (clientName && startDate && endDate) {
+                  const currentClients = getClients();
+                  let client = currentClients.find(c => c.companyName.toLowerCase() === clientName.toLowerCase());
+                  
+                  if (!client) {
+                      // Client should have been created above, but just in case
+                      const newClient: Client = {
+                          id: `CLI-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                          companyName: clientName,
+                          contactPerson: 'Imported Contact',
+                          email: '',
+                          phone: '',
+                          status: 'Active',
+                          billingDay: billingDay ? parseInt(billingDay, 10) : undefined
+                      };
+                      addClient(newClient);
+                      client = newClient;
                   }
 
                   const isSideA = sideOrSlot?.toUpperCase() === 'A';
