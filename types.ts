@@ -186,4 +186,4 @@ export interface CompanyProfile {
     country: string;
 }
 
-export const VAT_RATE = 0.15;
+export const VAT_RATE = 0.155;

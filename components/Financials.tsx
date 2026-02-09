@@ -125,7 +125,7 @@ export const Financials: React.FC<FinancialsProps> = ({ initialTab = 'Invoices' 
                         </div>
                         <div className="flex items-center gap-2">
                             <input type="checkbox" checked={hasVat} disabled={activeTab === 'Receipts' && !!selectedInvoiceToPay} onChange={e => setHasVat(e.target.checked)} className="rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
-                            <label className="text-sm font-medium text-slate-600">Include VAT (15%)</label>
+                            <label className="text-sm font-medium text-slate-600">Include VAT (15.5%)</label>
                         </div>
                         <button type="submit" className="w-full py-4 text-white bg-slate-900 rounded-xl hover:bg-slate-800 flex items-center justify-center gap-2 shadow-xl font-bold uppercase tracking-wider transition-all"><Save size={18} /> Create {activeTab.slice(0, -1)}</button>
                     </form>

@@ -123,7 +123,7 @@ export const ContractList: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
                             <input type="checkbox" id="hasVat" checked={editingContract.hasVat} onChange={(e) => setEditingContract({...editingContract, hasVat: e.target.checked})} className="w-5 h-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
-                            <label htmlFor="hasVat" className="text-sm font-medium text-slate-700">Include VAT (15%)</label>
+                            <label htmlFor="hasVat" className="text-sm font-medium text-slate-700">Include VAT (15.5%)</label>
                         </div>
                         <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                             <div className="flex justify-between items-center">
