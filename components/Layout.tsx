@@ -4,8 +4,8 @@ import {
   LayoutDashboard, Map, Users, FileText, CreditCard, Receipt, Settings as SettingsIcon,
   Menu, X, Bell, LogOut, Globe, PieChart, Wallet, CheckSquare, Wrench, Database, RefreshCw, ChevronDown, Banknote
 } from 'lucide-react';
-import { getCurrentUser, logout } from '../services/authService';
-import { getSystemAlertCount, triggerAutoBackup, runAutoBilling, runMaintenanceCheck, triggerFullSync } from '../services/mockData';
+import { logout } from '../services/authService';
+import { getSystemAlertCount, triggerAutoBackup, runAutoBilling, runMaintenanceCheck, triggerFullSync, getCurrentUserName } from '../services/mockData';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../services/supabaseClient';
 
 interface LayoutProps {
@@ -57,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
   const [dbConnected, setDbConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(true);
-  const user = getCurrentUser();
+  const currentUserName = getCurrentUserName();
 
   useEffect(() => {
     setAlertCount(getSystemAlertCount());
@@ -173,11 +173,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
         <div className="p-4 border-t border-slate-800">
            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800 transition-colors">
               <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-sm font-semibold text-white">
-                  {user?.firstName?.charAt(0) || 'U'}
+                  {currentUserName ? currentUserName.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                 <p className="text-sm font-medium text-white truncate">{user?.firstName || 'User'} {user?.lastName || ''}</p>
-                 <p className="text-xs text-slate-500 truncate">{user?.role || 'Guest'}</p>
+                 <p className="text-sm font-medium text-white truncate">{currentUserName || 'User'}</p>
+                 <p className="text-xs text-slate-500 truncate">Staff</p>
               </div>
               <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors p-1.5" title="Logout">
                  <LogOut size={16} />

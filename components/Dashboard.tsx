@@ -5,9 +5,9 @@ import {
   BarChart, Bar, Cell, PieChart, Pie, ComposedChart, Line, Legend
 } from 'recharts';
 import { DollarSign, FileText, Activity, Users, TrendingUp, TrendingDown, Bell, AlertTriangle, Calendar, CheckCircle, ArrowUpRight, Zap, Sparkles, Loader2 } from 'lucide-react';
-import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe, pullAllDataFromSupabase, isSupabaseSynced } from '../services/mockData';
+import { getContracts, getInvoices, getBillboards, getClients, getExpiringContracts, getOverdueInvoices, getUpcomingBillings, getFinancialTrends, subscribe, pullAllDataFromSupabase, isSupabaseSynced, getCurrentUserName } from '../services/mockData';
 import { BillboardType } from '../types';
-import { getCurrentUser, isSupabaseConfigured } from '../services/authService';
+import { isSupabaseConfigured } from '../services/authService';
 
 interface AIInsight {
   title: string;
@@ -20,7 +20,7 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
   const [loadingAI, setLoadingAI] = useState(false);
-  const currentUser = getCurrentUser();
+  const currentUser = getCurrentUserName();
 
   // Generate AI insights using Groq
   const generateAIInsights = async (metrics: any) => {
@@ -205,7 +205,7 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            Welcome back{currentUser?.firstName ? `, ${currentUser.firstName}` : ''}
+            Welcome back{currentUser ? `, ${currentUser.split(' ')[0]}` : ''}
           </h1>
           <p className="text-slate-500 text-sm mt-1">Here's what's happening with your billboard network</p>
         </div>

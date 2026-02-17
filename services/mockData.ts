@@ -220,11 +220,17 @@ export const pullAllDataFromSupabase = async (): Promise<boolean> => {
             
             if (!profileError && profileData) {
                 companyProfile = {
+                    ...companyProfile,
                     name: profileData.name || companyProfile.name,
                     address: profileData.address || companyProfile.address,
                     phone: profileData.phone || companyProfile.phone,
                     email: profileData.email || companyProfile.email,
                     website: profileData.website || companyProfile.website,
+                    vatNumber: profileData.vatNumber || companyProfile.vatNumber,
+                    regNumber: profileData.regNumber || companyProfile.regNumber,
+                    supportEmail: profileData.supportEmail || companyProfile.supportEmail,
+                    city: profileData.city || companyProfile.city,
+                    country: profileData.country || companyProfile.country,
                 };
                 if (profileData.logo) {
                     companyLogo = profileData.logo;
@@ -686,7 +692,7 @@ export const restoreSystemBackup = async (jsonString: string): Promise<{ success
 // ===== AUDIT LOG CRUD =====
 
 // Helper to get the current logged-in user's name
-const getCurrentUserName = (): string => {
+export const getCurrentUserName = (): string => {
     try {
         const stored = localStorage.getItem('billboard_user');
         if (stored) {

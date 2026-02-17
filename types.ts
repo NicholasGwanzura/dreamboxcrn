@@ -102,6 +102,7 @@ export interface Invoice {
   contractId?: string;
   clientId: string;
   date: string;
+  createdAt?: string; // Optional for backwards compatibility
   items: { description: string; amount: number }[];
   subtotal: number;
   vatAmount: number; // 0 if hasVat is false
