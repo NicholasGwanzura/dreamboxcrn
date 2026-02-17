@@ -202,7 +202,7 @@ const BillboardCard: React.FC<BillboardCardProps> = ({ billboard, index, onEdit,
 export const BillboardList: React.FC = () => {
   const [billboards, setBillboards] = useState<Billboard[]>(getBillboards());
   const [filter, setFilter] = useState<'All' | 'Digital' | 'Static'>('All');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [isClientView, setIsClientView] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -793,7 +793,6 @@ export const BillboardList: React.FC = () => {
              </div>
              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                 <div className="flex bg-white/80 backdrop-blur-sm rounded-full border border-slate-200 p-1 shadow-sm">
-                    <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-full transition-all ${viewMode === 'grid' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`} title="Grid View"><GridIcon size={18} /></button>
                     <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-full transition-all ${viewMode === 'list' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`} title="List View"><ListIcon size={18} /></button>
                     <button onClick={() => setViewMode('map')} className={`p-2.5 rounded-full transition-all ${viewMode === 'map' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-900'}`} title="Map View"><MapIcon size={18} /></button>
                 </div>

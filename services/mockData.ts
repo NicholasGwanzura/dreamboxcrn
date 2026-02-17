@@ -248,6 +248,10 @@ export const pullAllDataFromSupabase = async (): Promise<boolean> => {
         
         notifyListeners();
         console.log(`✅ SUPABASE SYNC COMPLETE! ${syncedTables} tables loaded. Supabase is now the source of truth.`);
+        
+        // Rebuild billboard statuses from contracts after all data is loaded
+        rebuildBillboardStatuses();
+        
         return true;
     } catch (error: any) {
         console.error('❌ Failed to pull data from Supabase:', error.message);
@@ -861,6 +865,42 @@ export const deleteContract = (id: string) => {
         showSuccess('Contract deleted successfully');
         notifyListeners();
     }
+};
+
+// Rebuild billboard statuses from contracts (call after loading data from Supabase)
+export const rebuildBillboardStatuses = () => {
+    billboards = billboards.map(billboard => {
+        if (billboard.type !== BillboardType.Static) return billboard;
+        
+        // Reset to available first - cast to proper type
+        let updated: Billboard = { ...billboard, sideAStatus: 'Available' as const, sideBStatus: 'Available' as const, sideAClientId: undefined, sideBClientId: undefined };
+        
+        // Find contracts for this billboard
+        const billboardContracts = contracts.filter(c => c.billboardId === billboard.id);
+        
+        billboardContracts.forEach(contract => {
+            if (contract.side === 'A' || contract.details?.includes('Side A')) {
+                updated.sideAStatus = 'Rented';
+                updated.sideAClientId = contract.clientId;
+            }
+            if (contract.side === 'B' || contract.details?.includes('Side B')) {
+                updated.sideBStatus = 'Rented';
+                updated.sideBClientId = contract.clientId;
+            }
+            if (contract.side === 'Both') {
+                updated.sideAStatus = 'Rented';
+                updated.sideBStatus = 'Rented';
+                updated.sideAClientId = contract.clientId;
+                updated.sideBClientId = contract.clientId;
+            }
+        });
+        
+        return updated;
+    });
+    
+    saveToStorage(STORAGE_KEYS.BILLBOARDS, billboards);
+    syncToCloudMirror();
+    notifyListeners();
 };
 
 export const addInvoice = (invoice: Invoice) => { invoices = [invoice, ...invoices]; saveToStorage(STORAGE_KEYS.INVOICES, invoices); syncToCloudMirror(); syncToSupabase('invoices', invoice); logAction('Create Invoice', `Created ${invoice.type} #${invoice.id} ($${invoice.total})`); showSuccess(`${invoice.type} #${invoice.id} created successfully`); notifyListeners(); };

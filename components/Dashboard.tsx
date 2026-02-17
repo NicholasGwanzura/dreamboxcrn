@@ -166,8 +166,17 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
   const totalStaticSides = staticBillboards.length * 2;
   const rentedStaticSides = staticBillboards.reduce((acc, b) => {
     let count = 0;
+    // First check stored status
     if (b.sideAStatus === 'Rented') count++;
     if (b.sideBStatus === 'Rented') count++;
+    // Fallback: calculate from contracts if status is undefined
+    if (count === 0) {
+        const billboardContracts = contracts.filter(c => c.billboardId === b.id && c.status === 'Active');
+        billboardContracts.forEach(contract => {
+            if (contract.side === 'A' || contract.side === 'Both' || contract.details?.includes('Side A')) count++;
+            if (contract.side === 'B' || contract.side === 'Both' || contract.details?.includes('Side B')) count++;
+        });
+    }
     return acc + count;
   }, 0);
 
