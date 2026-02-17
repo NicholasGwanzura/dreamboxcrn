@@ -33,9 +33,10 @@ export const Dashboard: React.FC = () => {
       }
 
       const prompt = `You are a billboard advertising business analyst. Based on these metrics, provide 3 concise business insights in JSON format:
-- Total Revenue: $${metrics.totalRevenue.toLocaleString()}
+- Total Revenue: ${metrics.totalRevenue.toLocaleString()}
 - Collection Rate: ${metrics.collectionRate}%
-- Occupancy Rate: ${metrics.occupancyRate}%
+- Digital Occupancy Rate: ${metrics.digitalOccupancyRate}% (LED)
+- Static Occupancy Rate: ${metrics.staticOccupancyRate}% (Billboards)
 - Active Contracts: ${metrics.activeContracts}
 - Overdue Invoices: ${metrics.overdueCount}
 - Expiring Soon: ${metrics.expiringCount}
@@ -109,7 +110,7 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
   // Helper to get client name
   const getClientName = (id: string) => clients.find(c => c.id === id)?.companyName || 'Unknown';
 
-  // Get occupancy trend
+  // Get occupancy trend for both Digital and Static
   const getOccupancyTrend = () => {
     const days: any = {};
     for (let i = 6; i >= 0; i--) {
@@ -117,9 +118,16 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
       date.setDate(date.getDate() - i);
       const dayKey = date.toLocaleString('default', { month: 'short', day: 'numeric' });
       // Simulate trend (in real app, fetch historical data)
-      days[dayKey] = occupancyRate - (Math.random() * 10);
+      days[dayKey] = {
+        digital: digitalOccupancyRate - (Math.random() * 10),
+        static: staticOccupancyRate - (Math.random() * 8)
+      };
     }
-    return Object.entries(days).map(([day, rate]) => ({ day, occupancy: Math.round(Math.max(0, rate as number)) }));
+    return Object.entries(days).map(([day, rates]: [string, any]) => ({ 
+      day, 
+      digital: Math.round(Math.max(0, rates.digital)),
+      static: Math.round(Math.max(0, rates.static))
+    }));
   };
 
   useEffect(() => {
@@ -163,6 +171,9 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
     return acc + count;
   }, 0);
 
+  // Separate occupancy rates for Digital (LED) and Static inventory
+  const digitalOccupancyRate = totalLedSlots > 0 ? Math.round((rentedLedSlots / totalLedSlots) * 100) : 0;
+  const staticOccupancyRate = totalStaticSides > 0 ? Math.round((rentedStaticSides / totalStaticSides) * 100) : 0;
   const totalUnits = totalLedSlots + totalStaticSides;
   const rentedUnits = rentedLedSlots + rentedStaticSides;
   const occupancyRate = totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0;
@@ -178,7 +189,8 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
     generateAIInsights({
       totalRevenue,
       collectionRate,
-      occupancyRate,
+      digitalOccupancyRate,
+      staticOccupancyRate,
       activeContracts,
       overdueCount: overdueInvoices.length,
       expiringCount: expiringContracts.length
@@ -206,7 +218,7 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
       </div>
 
       {/* KPI Cards - Compact Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -238,11 +250,23 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
             <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
               <Activity className="w-5 h-5 text-violet-600" />
             </div>
-            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{rentedUnits}/{totalUnits}</span>
+            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{rentedLedSlots}/{totalLedSlots}</span>
           </div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Occupancy</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{occupancyRate}%</p>
-          <p className="text-xs text-slate-400 mt-1">{totalUnits - rentedUnits} slots available</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Digital (LED)</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{digitalOccupancyRate}%</p>
+          <p className="text-xs text-slate-400 mt-1">{totalLedSlots - rentedLedSlots} slots available</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-slate-300 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+              <Activity className="w-5 h-5 text-amber-600" />
+            </div>
+            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{rentedStaticSides}/{totalStaticSides}</span>
+          </div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Static (Billboard)</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{staticOccupancyRate}%</p>
+          <p className="text-xs text-slate-400 mt-1">{totalStaticSides - rentedStaticSides} sides available</p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/60 hover:border-slate-300 transition-all">
@@ -386,28 +410,37 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
           </div>
         </div>
 
-        {/* Occupancy Trend */}
+        {/* Occupancy Trend - Dual View */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/60">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-slate-900">Occupancy Trend</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Last 7 days</p>
+              <p className="text-xs text-slate-500 mt-0.5">Digital vs Static (Last 7 days)</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-500"></span> Digital</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Static</span>
             </div>
           </div>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={occupancyTrend}>
                 <defs>
-                  <linearGradient id="occupancyGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="digitalGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4}/>
                     <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05}/>
+                  </linearGradient>
+                  <linearGradient id="staticGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4}/>
+                    <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.05}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
                 <Tooltip contentStyle={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} formatter={(value: any) => `${value}%`} />
-                <Area type="monotone" dataKey="occupancy" stroke="#6366f1" strokeWidth={2} fill="url(#occupancyGradient)" />
+                <Area type="monotone" dataKey="digital" stroke="#6366f1" strokeWidth={2} fill="url(#digitalGradient)" name="Digital" />
+                <Area type="monotone" dataKey="static" stroke="#f59e0b" strokeWidth={2} fill="url(#staticGradient)" name="Static" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -489,41 +522,74 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
           </div>
         </div>
 
-        {/* Occupancy Donut */}
+        {/* Fleet Status - Dual Donut Charts */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/60">
           <h3 className="font-semibold text-slate-900 mb-4">Fleet Status</h3>
-          <div className="h-48 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={[{ name: 'Occupied', value: rentedUnits }, { name: 'Available', value: totalUnits - rentedUnits }]}
-                  cx="50%" cy="50%"
-                  innerRadius={60} outerRadius={80}
-                  startAngle={90} endAngle={-270}
-                  paddingAngle={4}
-                  dataKey="value"
-                  stroke="none"
-                  cornerRadius={4}
-                >
-                  <Cell fill="#6366f1" />
-                  <Cell fill="#e2e8f0" />
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold text-slate-900">{occupancyRate}%</span>
-              <span className="text-xs text-slate-400">Occupied</span>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Digital (LED) */}
+            <div className="text-center">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Digital (LED)</p>
+              <div className="h-32 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[{ name: 'Occupied', value: rentedLedSlots }, { name: 'Available', value: totalLedSlots - rentedLedSlots }]}
+                      cx="50%" cy="50%"
+                      innerRadius={35} outerRadius={50}
+                      startAngle={90} endAngle={-270}
+                      paddingAngle={4}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      <Cell fill="#6366f1" />
+                      <Cell fill="#e2e8f0" />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-slate-900">{digitalOccupancyRate}%</span>
+                </div>
+              </div>
+              <div className="flex justify-center gap-3 mt-1 text-xs">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> {rentedLedSlots}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200"></span> {totalLedSlots - rentedLedSlots}</span>
+              </div>
             </div>
-          </div>
-          <div className="flex justify-center gap-6 mt-2 text-xs">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Rented ({rentedUnits})</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-200"></span> Available ({totalUnits - rentedUnits})</span>
+            {/* Static */}
+            <div className="text-center">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Static</p>
+              <div className="h-32 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[{ name: 'Occupied', value: rentedStaticSides }, { name: 'Available', value: totalStaticSides - rentedStaticSides }]}
+                      cx="50%" cy="50%"
+                      innerRadius={35} outerRadius={50}
+                      startAngle={90} endAngle={-270}
+                      paddingAngle={4}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      <Cell fill="#f59e0b" />
+                      <Cell fill="#e2e8f0" />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-slate-900">{staticOccupancyRate}%</span>
+                </div>
+              </div>
+              <div className="flex justify-center gap-3 mt-1 text-xs">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> {rentedStaticSides}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200"></span> {totalStaticSides - rentedStaticSides}</span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Quick Stats */}
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl text-white">
-          <h3 className="font-semibold mb-4">Quick Stats</h3>
+          <h3 className="font-semibold mb-4">Inventory Breakdown</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-400">Static Billboards</span>
@@ -534,12 +600,20 @@ Example: [{"title":"Strong","description":"msg","icon":"trending"}]`;
               <span className="font-semibold">{ledBillboards.length}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Total Slots/Sides</span>
-              <span className="font-semibold">{totalUnits}</span>
+              <span className="text-sm text-slate-400">Static Sides (Total)</span>
+              <span className="font-semibold">{totalStaticSides}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">Pending Invoices</span>
-              <span className="font-semibold text-amber-400">{invoices.filter(i => i.status === 'Pending').length}</span>
+              <span className="text-sm text-slate-400">LED Slots (Total)</span>
+              <span className="font-semibold">{totalLedSlots}</span>
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-700">
+              <span className="text-sm text-slate-400">Static Occupancy</span>
+              <span className="font-semibold text-amber-400">{staticOccupancyRate}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-400">Digital Occupancy</span>
+              <span className="font-semibold text-indigo-400">{digitalOccupancyRate}%</span>
             </div>
             <div className="flex items-center justify-between pt-3 border-t border-slate-700">
               <span className="text-sm text-slate-400">Collection Rate</span>

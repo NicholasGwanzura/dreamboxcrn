@@ -912,6 +912,18 @@ export const deleteMaintenanceLog = (id: string) => { const target = maintenance
 
 export const RELEASE_NOTES = [
     {
+        version: '2.3.0',
+        date: 'February 17, 2026',
+        title: 'Separate Digital & Static Inventory',
+        features: [
+            'Digital vs Static Reporting: Occupancy rates now show separately for LED (Digital) and Static Billboard inventory.',
+            'Dashboard Split View: KPI cards, trend charts, and fleet status now display independent metrics for Digital and Static inventory.',
+            'Inventory Breakdown: Quick stats panel shows separate totals for LED slots and Static sides.',
+            'AI Insights: AI analysis now uses separate occupancy rates for more accurate business insights.',
+            'Version: 2.3.0 - The Inventory Segmentation Update.'
+        ]
+    },
+    {
         version: '2.2.0',
         date: 'January 21, 2026',
         title: 'AI-Powered Billboard Intelligence',
