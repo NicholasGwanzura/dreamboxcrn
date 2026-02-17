@@ -837,7 +837,7 @@ export const BillboardList: React.FC = () => {
                  </div>
              </div>
         ) : (
-            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-6' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 auto-rows-fr'}`}>
+            <div className={`flex-1 overflow-y-auto pr-2 pb-20 ${viewMode === 'list' ? 'space-y-6' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6'}`}>
                 {/* Digital Billboards Section */}
                 {filter === 'All' && digitalBillboards.length > 0 && (
                     <div className="col-span-full">
